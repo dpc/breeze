@@ -1,0 +1,12 @@
+[package]
+authors = ["Dawid Ciężarkiewicz <dpc@dpc.pw>"]
+edition = "2018"
+name = "breeze"
+version = "0.1.0"
+
+[dependencies]
+common_failures = "*"
+failure = "*"
+ropey = "*"
+rustbox = "*"
+default = "*"
