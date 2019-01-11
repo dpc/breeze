@@ -2,8 +2,14 @@ mod prelude;
 
 use self::prelude::*;
 
-use rustbox::{Color, Key, OutputMode, RustBox};
 use std::sync::Arc;
+
+use std::io::Write;
+use termion::color;
+use termion::event::Key;
+use termion::input::TermRead;
+use termion::raw::IntoRawMode;
+use termion::screen::*;
 
 /// Selection
 ///
@@ -132,7 +138,7 @@ impl Buffer {
 }
 
 trait Mode {
-    fn handle(&self, state: State, key: rustbox::Key) -> State;
+    fn handle(&self, state: State, key: Key) -> State;
     fn name(&self) -> &str;
 }
 
@@ -144,12 +150,12 @@ impl Mode for InsertMode {
         "insert"
     }
 
-    fn handle(&self, mut state: State, key: rustbox::Key) -> State {
+    fn handle(&self, mut state: State, key: Key) -> State {
         match key {
             Key::Esc => {
                 state.modes.pop();
             }
-            Key::Enter => {
+            Key::Char('\n') => {
                 state.buffer.insert('\n');
             }
             Key::Backspace => {
@@ -175,7 +181,7 @@ impl Mode for NormalMode {
         "normal"
     }
 
-    fn handle(&self, mut state: State, key: rustbox::Key) -> State {
+    fn handle(&self, mut state: State, key: Key) -> State {
         match key {
             Key::Char('q') => {
                 state.quit = true;
@@ -192,7 +198,7 @@ impl Mode for NormalMode {
             Key::Char('d') => {
                 state.buffer.delete();
             }
-            Key::Char('\'') => {
+            Key::Char('\'') | Key::Alt(';') => {
                 state.buffer.reverse();
             }
             _ => {}
@@ -209,37 +215,61 @@ struct State {
 
 struct Breeze {
     state: State,
-    rb: RustBox,
+    screen: AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>,
     display_cols: usize,
     display_rows: usize,
 }
 
 impl Breeze {
     fn init() -> Result<Self> {
-        let mut rb = RustBox::init(Default::default())?;
+        let screen = AlternateScreen::from(std::io::stdout().into_raw_mode().unwrap());
 
-        rb.set_output_mode(OutputMode::EightBit);
         let mut state = State::default();
         state.modes.push(Arc::new(NormalMode));
+        let (cols, rows) = termion::terminal_size()?;
         Ok(Self {
             state,
-            display_cols: rb.width(),
-            display_rows: rb.height(),
-            rb,
+            display_cols: cols as usize,
+            display_rows: rows as usize,
+            screen,
         })
     }
 
     fn run(&mut self) -> Result<()> {
-        while !self.state.quit {
+        self.draw_buffer()?;
+        self.screen.flush()?;
+
+        let stdin = std::io::stdin();
+        for c in stdin.keys() {
+            match c {
+                Ok(key) => {
+                    self.state = self
+                        .state
+                        .modes
+                        .last()
+                        .expect("at least one mode")
+                        .handle(self.state.clone(), key);
+                }
+                Err(e) => panic!("{}", e),
+            }
+
+            if self.state.quit {
+                return Ok(());
+            }
             self.draw_buffer()?;
-            self.rb.present();
-            self.run_one_event()?;
+            self.screen.flush()?;
         }
         Ok(())
     }
 
     fn draw_buffer(&mut self) -> Result<()> {
-        self.rb.clear();
+        write!(
+            self.screen,
+            "{}{}{}",
+            color::Fg(color::Reset),
+            color::Bg(color::Reset),
+            termion::clear::All
+        )?;
         let mut ch_idx = 0;
         for (line_i, line) in self
             .state
@@ -249,6 +279,11 @@ impl Breeze {
             .enumerate()
             .take(self.display_rows)
         {
+            write!(
+                self.screen,
+                "{}",
+                termion::cursor::Goto(1, line_i as u16 + 1)
+            )?;
             for (char_i, ch) in line.chars().enumerate().take(self.display_cols) {
                 let in_selection = self.state.buffer.is_idx_selected(ch_idx + char_i);
                 let ch = if ch == '\n' {
@@ -261,54 +296,45 @@ impl Breeze {
                     ch
                 };
 
-                self.rb.print_char(
-                    char_i,
-                    line_i,
-                    rustbox::RB_NORMAL,
-                    if in_selection {
-                        Color::Byte(16)
-                    } else {
-                        Color::White
-                    },
-                    if in_selection {
-                        Color::Byte(4)
-                    } else {
-                        Color::Black
-                    },
-                    ch,
-                );
+                if in_selection {
+                    write!(
+                        self.screen,
+                        "{}{}{}",
+                        color::Fg(color::AnsiValue(16)),
+                        color::Bg(color::AnsiValue(4)),
+                        ch
+                    )?;
+                } else {
+                    write!(
+                        self.screen,
+                        "{}{}{}",
+                        color::Fg(color::Reset),
+                        color::Bg(color::Reset),
+                        ch
+                    )?;
+                }
             }
             ch_idx += line.len_chars();
         }
 
-        self.rb.print(
-            0,
-            self.display_rows - 1,
-            rustbox::RB_NORMAL,
-            Color::White,
-            Color::Black,
+        // status
+        write!(
+            self.screen,
+            "{}{}{}{}",
+            color::Fg(color::Reset),
+            color::Bg(color::Reset),
+            termion::cursor::Goto(1, self.display_rows as u16),
             self.state.modes.last().unwrap().name(),
-        );
+        )?;
 
-        print!("\x1b[6 q");
+        // cursor
         let (cur_row, cur_col) = self.state.buffer.cursor_pos();
-        self.rb.set_cursor(cur_col as isize, cur_row as isize);
-        Ok(())
-    }
-
-    fn run_one_event(&mut self) -> Result<()> {
-        match self.rb.poll_event(false) {
-            Ok(rustbox::Event::KeyEvent(key)) => {
-                self.state = self
-                    .state
-                    .modes
-                    .last()
-                    .expect("at least one mode")
-                    .handle(self.state.clone(), key);
-            }
-            Err(e) => panic!("{}", e),
-            _ => {}
-        }
+        write!(
+            self.screen,
+            "\x1b[6 q{}{}",
+            termion::cursor::Goto(cur_col as u16 + 1, cur_row as u16 + 1),
+            termion::cursor::Show,
+        )?;
         Ok(())
     }
 }
