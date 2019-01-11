@@ -3,16 +3,19 @@ mod prelude;
 use self::prelude::*;
 
 use rustbox::{Color, Key, OutputMode, RustBox};
+use std::sync::Arc;
 
+/// Selection
+///
+/// An ordererd pair of indices in the buffer
 #[derive(Default, Debug, Clone)]
-struct Buffer {
-    text: ropey::Rope,
+struct Selection {
     anchor: usize,
     cursor: usize,
 }
 
-impl Buffer {
-    fn is_pos_in_selection(&self, pos: usize) -> bool {
+impl Selection {
+    fn is_idx_inside(&self, pos: usize) -> bool {
         let anchor = self.anchor;
         let cursor = self.cursor;
 
@@ -25,7 +28,7 @@ impl Buffer {
         }
     }
 
-    fn is_selection_forward(&self) -> Option<bool> {
+    fn is_forward(&self) -> Option<bool> {
         let anchor = self.anchor;
         let cursor = self.cursor;
 
@@ -38,59 +41,175 @@ impl Buffer {
         }
     }
 
-    fn insert(&mut self, ch: char) {
-        self.text.insert_char(self.cursor, ch);
+    fn sorted(&self) -> (usize, usize) {
+        if self.anchor < self.cursor {
+            (self.anchor, self.cursor)
+        } else {
+            (self.cursor, self.anchor)
+        }
+    }
+
+    fn sorted_range(&self) -> std::ops::Range<usize> {
+        let (a, b) = self.sorted();
+        a..b
+    }
+
+    fn collapse_to_cursor(&mut self) {
         self.anchor = self.cursor;
-        self.cursor += 1;
+    }
+
+    fn reverse(&mut self) {
+        std::mem::swap(&mut self.cursor, &mut self.anchor);
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+struct Buffer {
+    text: ropey::Rope,
+    sel: Selection,
+}
+
+impl Buffer {
+    fn is_idx_selected(&self, idx: usize) -> bool {
+        self.sel.is_idx_inside(idx)
+    }
+
+    fn reverse(&mut self) {
+        self.sel.reverse();
+    }
+
+    fn insert(&mut self, ch: char) {
+        self.text.insert_char(self.sel.cursor, ch);
+        self.sel.anchor = self.sel.cursor;
+        self.sel.cursor += 1;
+    }
+
+    fn delete(&mut self) {
+        self.text.remove(self.sel.sorted_range());
+        self.sel.collapse_to_cursor();
     }
 
     fn backspace(&mut self) {
-        if self.cursor == 0 {
+        if self.sel.cursor == 0 {
             return;
         }
 
-        self.text.remove(self.cursor - 1..self.cursor);
-        match self.is_selection_forward() {
+        self.text.remove(self.sel.cursor - 1..self.sel.cursor);
+        match self.sel.is_forward() {
             Some(true) => {
-                self.cursor -= 1;
+                self.sel.cursor -= 1;
             }
             _ => {
-                self.anchor -= 1;
-                self.cursor -= 1;
+                self.sel.anchor -= 1;
+                self.sel.cursor -= 1;
             }
         }
     }
     fn move_left(&mut self) {
-        if 0 < self.cursor {
-            self.anchor = self.cursor;
-            self.cursor -= 1;
+        if 0 < self.sel.cursor {
+            self.sel.anchor = self.sel.cursor;
+            self.sel.cursor -= 1;
         }
     }
 
     fn move_right(&mut self) {
-        if self.cursor < self.text.len_chars() {
-            self.anchor = self.cursor;
-            self.cursor += 1;
+        if self.sel.cursor < self.text.len_chars() {
+            self.sel.anchor = self.sel.cursor;
+            self.sel.cursor += 1;
         }
     }
+    fn cursor_pos(&self) -> (usize, usize) {
+        self.idx_to_pos(self.sel.cursor)
+    }
 
-    fn char_idx_to_row_col(&self, char_idx: usize) -> (usize, usize) {
+    fn idx_to_pos(&self, char_idx: usize) -> (usize, usize) {
         let line = self.text.char_to_line(char_idx);
         let line_start_pos = self.text.line_to_char(line);
         let col = char_idx - line_start_pos;
 
         (line, col)
     }
+}
 
-    fn cursor_pos(&self) -> (usize, usize) {
-        self.char_idx_to_row_col(self.cursor)
+trait Mode {
+    fn handle(&self, state: State, key: rustbox::Key) -> State;
+    fn name(&self) -> &str;
+}
+
+struct InsertMode;
+struct NormalMode;
+
+impl Mode for InsertMode {
+    fn name(&self) -> &str {
+        "insert"
+    }
+
+    fn handle(&self, mut state: State, key: rustbox::Key) -> State {
+        match key {
+            Key::Esc => {
+                state.modes.pop();
+            }
+            Key::Enter => {
+                state.buffer.insert('\n');
+            }
+            Key::Backspace => {
+                state.buffer.backspace();
+            }
+            Key::Left => {
+                state.buffer.move_left();
+            }
+            Key::Right => {
+                state.buffer.move_right();
+            }
+            Key::Char(ch) => {
+                state.buffer.insert(ch);
+            }
+            _ => {}
+        }
+        state
     }
 }
 
-struct Breeze {
-    running: bool,
-    rb: RustBox,
+impl Mode for NormalMode {
+    fn name(&self) -> &str {
+        "normal"
+    }
+
+    fn handle(&self, mut state: State, key: rustbox::Key) -> State {
+        match key {
+            Key::Char('q') => {
+                state.quit = true;
+            }
+            Key::Char('i') => {
+                state.modes.push(Arc::new(InsertMode));
+            }
+            Key::Char('h') => {
+                state.buffer.move_left();
+            }
+            Key::Char('l') => {
+                state.buffer.move_right();
+            }
+            Key::Char('d') => {
+                state.buffer.delete();
+            }
+            Key::Char('\'') => {
+                state.buffer.reverse();
+            }
+            _ => {}
+        }
+        state
+    }
+}
+#[derive(Default, Clone)]
+struct State {
+    quit: bool,
+    modes: Vec<Arc<Mode>>,
     buffer: Buffer,
+}
+
+struct Breeze {
+    state: State,
+    rb: RustBox,
     display_cols: usize,
     display_rows: usize,
 }
@@ -100,17 +219,18 @@ impl Breeze {
         let mut rb = RustBox::init(Default::default())?;
 
         rb.set_output_mode(OutputMode::EightBit);
+        let mut state = State::default();
+        state.modes.push(Arc::new(NormalMode));
         Ok(Self {
+            state,
             display_cols: rb.width(),
             display_rows: rb.height(),
-            running: true,
             rb,
-            buffer: default(),
         })
     }
 
     fn run(&mut self) -> Result<()> {
-        while self.running {
+        while !self.state.quit {
             self.draw_buffer()?;
             self.rb.present();
             self.run_one_event()?;
@@ -118,29 +238,19 @@ impl Breeze {
         Ok(())
     }
 
-    fn clear_buffer(&self) {
-        // for whatever reason `RustBox::clear` is not functional
-        for x in 0..self.display_cols {
-            for y in 0..self.display_rows {
-                unsafe {
-                    self.rb.change_cell(
-                        x,
-                        y,
-                        '-' as u32,
-                        Color::White.as_256color(),
-                        Color::Black.as_256color(),
-                    );
-                }
-            }
-        }
-    }
     fn draw_buffer(&mut self) -> Result<()> {
-        // self.clear_buffer();
         self.rb.clear();
         let mut ch_idx = 0;
-        for (line_i, line) in self.buffer.text.lines().enumerate().take(self.display_rows) {
+        for (line_i, line) in self
+            .state
+            .buffer
+            .text
+            .lines()
+            .enumerate()
+            .take(self.display_rows)
+        {
             for (char_i, ch) in line.chars().enumerate().take(self.display_cols) {
-                let in_selection = self.buffer.is_pos_in_selection(ch_idx + char_i);
+                let in_selection = self.state.buffer.is_idx_selected(ch_idx + char_i);
                 let ch = if ch == '\n' {
                     if in_selection {
                         '·'
@@ -171,41 +281,31 @@ impl Breeze {
             ch_idx += line.len_chars();
         }
 
+        self.rb.print(
+            0,
+            self.display_rows - 1,
+            rustbox::RB_NORMAL,
+            Color::White,
+            Color::Black,
+            self.state.modes.last().unwrap().name(),
+        );
+
         print!("\x1b[6 q");
-        let (cur_row, cur_col) = self.buffer.cursor_pos();
+        let (cur_row, cur_col) = self.state.buffer.cursor_pos();
         self.rb.set_cursor(cur_col as isize, cur_row as isize);
         Ok(())
     }
 
     fn run_one_event(&mut self) -> Result<()> {
         match self.rb.poll_event(false) {
-            Ok(rustbox::Event::KeyEvent(key)) => match key {
-                Key::Char('q') => {
-                    self.running = false;
-                }
-                Key::Char(ch) if 'a' <= ch && ch <= 'z' => {
-                    self.buffer.insert(ch);
-                }
-                Key::Char(ch) if 'A' <= ch && ch <= 'Z' => {
-                    self.buffer.insert(ch);
-                }
-                Key::Char(ch) if '1' <= ch && ch <= '9' => {
-                    self.buffer.insert(ch);
-                }
-                Key::Enter => {
-                    self.buffer.insert('\n');
-                }
-                Key::Backspace => {
-                    self.buffer.backspace();
-                }
-                Key::Left => {
-                    self.buffer.move_left();
-                }
-                Key::Right => {
-                    self.buffer.move_right();
-                }
-                _ => {}
-            },
+            Ok(rustbox::Event::KeyEvent(key)) => {
+                self.state = self
+                    .state
+                    .modes
+                    .last()
+                    .expect("at least one mode")
+                    .handle(self.state.clone(), key);
+            }
             Err(e) => panic!("{}", e),
             _ => {}
         }
