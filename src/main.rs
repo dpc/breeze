@@ -111,9 +111,31 @@ impl Buffer {
             }
         }
     }
+
     fn move_left(&mut self) {
         if 0 < self.sel.cursor {
             self.sel.anchor = self.sel.cursor;
+            self.sel.cursor -= 1;
+        }
+    }
+
+    fn move_up(&mut self) {
+        let (cur_line, cur_col) = self.idx_to_pos(self.sel.cursor);
+        if 0 < cur_line {
+            self.sel.anchor = self.sel.cursor;
+            self.sel.cursor = self.pos_to_idx_trim(cur_line - 1, cur_col);
+        }
+    }
+
+    fn move_down(&mut self) {
+        let (cur_line, cur_col) = self.idx_to_pos(self.sel.cursor);
+        if cur_line + 1 < self.text.len_lines() {
+            self.sel.anchor = self.sel.cursor;
+            self.sel.cursor = self.pos_to_idx_trim(cur_line + 1, cur_col);
+        }
+    }
+    fn extend_left(&mut self) {
+        if 0 < self.sel.cursor {
             self.sel.cursor -= 1;
         }
     }
@@ -124,6 +146,34 @@ impl Buffer {
             self.sel.cursor += 1;
         }
     }
+
+    fn extend_right(&mut self) {
+        if self.sel.cursor < self.text.len_chars() {
+            self.sel.cursor += 1;
+        }
+    }
+
+    fn forward_word(&mut self) {
+        let mut cursor = self.sel.cursor;
+        for idx in cursor.. {
+            if idx + 1 == self.text.len_chars() || self.text.char(idx).is_alphanumeric() {
+                cursor = idx;
+                break;
+            }
+        }
+
+        for idx in cursor.. {
+            if idx + 1 == self.text.len_chars() || !self.text.char(idx).is_alphanumeric() {
+                cursor = idx;
+                break;
+            }
+        }
+        if cursor != self.sel.cursor {
+            self.sel.anchor = self.sel.cursor;
+            self.sel.cursor = cursor;
+        }
+    }
+
     fn cursor_pos(&self) -> (usize, usize) {
         self.idx_to_pos(self.sel.cursor)
     }
@@ -134,6 +184,25 @@ impl Buffer {
         let col = char_idx - line_start_pos;
 
         (line, col)
+    }
+
+    fn pos_to_idx(&self, row: usize, col: usize) -> Option<usize> {
+        let line = self.text.line(row);
+        if line.len_chars() > col {
+            None
+        } else {
+            Some(self.text.line_to_char(row) + col)
+        }
+    }
+
+    fn pos_to_idx_trim(&self, row: usize, col: usize) -> usize {
+        let line = self.text.line(row);
+        let line_len = line.len_chars();
+        if line_len == 0 {
+            self.text.line_to_char(row)
+        } else {
+            self.text.line_to_char(row) + std::cmp::min(col, line_len - 1)
+        }
     }
 }
 
@@ -192,11 +261,26 @@ impl Mode for NormalMode {
             Key::Char('h') => {
                 state.buffer.move_left();
             }
+            Key::Char('H') => {
+                state.buffer.extend_left();
+            }
             Key::Char('l') => {
                 state.buffer.move_right();
             }
+            Key::Char('L') => {
+                state.buffer.extend_right();
+            }
+            Key::Char('j') => {
+                state.buffer.move_down();
+            }
+            Key::Char('k') => {
+                state.buffer.move_up();
+            }
             Key::Char('d') => {
                 state.buffer.delete();
+            }
+            Key::Char('w') => {
+                state.buffer.forward_word();
             }
             Key::Char('\'') | Key::Alt(';') => {
                 state.buffer.reverse();
