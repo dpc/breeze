@@ -74,6 +74,10 @@ impl CoordUnaligned {
         self.map_as_coord(text, Coord::backward)
     }
 
+    fn backward_n(self, n: usize, text: &Rope) -> Self {
+        self.map_as_coord(text, |coord, text| coord.backward_n(n, text))
+    }
+
     fn backward_word(self, text: &Rope) -> Self {
         self.map_as_coord(text, Coord::backward_word)
     }
@@ -190,6 +194,9 @@ impl Coord {
         self.map_as_idx(text, |idx| idx.backward(text))
     }
 
+    fn backward_n(self, n: usize, text: &Rope) -> Self {
+        self.map_as_idx(text, |idx| idx.backward_n(n, text))
+    }
     fn forward_word(self, text: &Rope) -> Self {
         self.map_as_idx(text, |idx| idx.forward_word(text))
     }
@@ -207,6 +214,9 @@ impl Idx {
         Idx(self.0.saturating_sub(1))
     }
 
+    fn backward_n(self, n: usize, _text: &Rope) -> Self {
+        Idx(self.0.saturating_sub(n))
+    }
     fn forward(self, text: &Rope) -> Self {
         self.forward_n(1, text)
     }
@@ -466,6 +476,19 @@ impl Default for Buffer {
 }
 
 impl Buffer {
+    fn for_each_selection<F, R>(&self, mut f: F) -> Vec<R>
+    where
+        F: FnMut(&SelectionUnaligned, &Rope) -> R,
+    {
+        let Self {
+            ref selections,
+            ref text,
+            ..
+        } = *self;
+
+        selections.iter().map(|sel| f(sel, text)).collect()
+    }
+
     fn for_each_selection_mut<F, R>(&mut self, mut f: F) -> Vec<R>
     where
         F: FnMut(&mut SelectionUnaligned, &mut Rope) -> R,
@@ -479,6 +502,22 @@ impl Buffer {
         selections.iter_mut().map(|sel| f(sel, text)).collect()
     }
 
+    fn for_each_enumerated_selection<F, R>(&self, mut f: F) -> Vec<R>
+    where
+        F: FnMut(usize, &SelectionUnaligned, &Rope) -> R,
+    {
+        let Self {
+            ref selections,
+            ref text,
+            ..
+        } = *self;
+
+        selections
+            .iter()
+            .enumerate()
+            .map(|(i, sel)| f(i, sel, text))
+            .collect()
+    }
     fn for_each_enumerated_selection_mut<F, R>(&mut self, mut f: F) -> Vec<R>
     where
         F: FnMut(usize, &mut SelectionUnaligned, &mut Rope) -> R,
@@ -507,27 +546,53 @@ impl Buffer {
     }
 
     fn insert(&mut self, ch: char) {
-        self.for_each_selection_mut(move |sel, text| {
-            let aligned_cursor = sel.cursor.align(text);
-            text.insert_char(aligned_cursor.to_idx(text).into(), ch);
+        let mut insertion_points = self
+            .for_each_enumerated_selection(|i, sel, text| (i, sel.cursor.align(text).to_idx(text)));
+        insertion_points.sort_by_key(|&(_, idx)| idx);
+        insertion_points.reverse();
 
-            sel.anchor = sel.cursor;
-            sel.cursor = sel.cursor.forward(text);
-        });
+        // we insert from the back, fixing idx past the insertion every time
+        // this is O(n^2) while it could be O(n)
+        for (i, (_, idx)) in insertion_points.iter().enumerate() {
+            self.text.insert_char(idx.0, ch);
+            for fixing_i in 0..=i {
+                let fixing_sel = &mut self.selections[insertion_points[fixing_i].0];
+                fixing_sel.cursor = fixing_sel.cursor.forward(&self.text);
+                *fixing_sel = fixing_sel.collapsed();
+            }
+        }
     }
 
     fn delete(&mut self) -> Vec<Rope> {
-        let yanked = self.for_each_selection_mut(|sel, text| {
+        let res = self.for_each_enumerated_selection_mut(|i, sel, text| {
             let range = sel.align(text).sorted_range_usize();
             let yanked = sub_rope(text, range.start, range.end);
-            text.remove(range);
-            *sel = sel.collapsed().trim(text);
-            yanked
+            (yanked, i, range)
         });
+        let mut removal_points = vec![];
+        let mut yanked = vec![];
 
-        self.for_each_selection_mut(|sel, text| {
-            *sel = sel.trim(text);
-        });
+        for (y, i, r) in res.into_iter() {
+            removal_points.push((i, r));
+            yanked.push(y);
+        }
+
+        removal_points.sort_by_key(|&(_, ref range)| range.start);
+        removal_points.reverse();
+
+        // we remove from the back, fixing idx past the removal every time
+        // this is O(n^2) while it could be O(n)
+        for (i, (_, range)) in removal_points.iter().enumerate() {
+            self.text.remove(range.clone());
+            for fixing_i in 0..=i {
+                let fixing_sel = &mut self.selections[removal_points[fixing_i].0];
+                eprintln!("{:?}", fixing_sel);
+                fixing_sel.cursor =
+                    max(fixing_sel.cursor, fixing_sel.anchor).backward_n(range.len(), &self.text);
+                eprintln!("{:?}", fixing_sel);
+                *fixing_sel = fixing_sel.collapsed();
+            }
+        }
 
         yanked
     }
@@ -540,18 +605,93 @@ impl Buffer {
     }
 
     fn paste(&mut self, yanked: &[Rope]) {
-        self.for_each_enumerated_selection_mut(|i, sel, text| {
+        let mut insertion_points = self
+            .for_each_enumerated_selection(|i, sel, text| (i, sel.cursor.align(text).to_idx(text)));
+        insertion_points.sort_by_key(|&(_, idx)| idx);
+        insertion_points.reverse();
+
+        // we insert from the back, fixing idx past the insertion every time
+        // this is O(n^2) while it could be O(n)
+        for (i, (_, idx)) in insertion_points.iter().enumerate() {
             if let Some(to_yank) = yanked.get(i) {
                 for chunk in to_yank.chunks() {
-                    let aligned_cursor = sel.cursor.align(text);
-                    text.insert(aligned_cursor.to_idx(text).into(), chunk);
-                    if !sel.align(text).is_forward().unwrap_or(false) {
-                        sel.anchor = sel.anchor.forward_n(chunk.len(), text);
-                        sel.cursor = sel.cursor.forward_n(chunk.len(), text);
+                    self.text.insert(idx.0, chunk);
+                }
+                {
+                    let fixing_sel = &mut self.selections[insertion_points[i].0];
+                    if fixing_sel.align(&self.text).is_forward().unwrap_or(true) {
+                        fixing_sel.anchor = fixing_sel.cursor;
+                        fixing_sel.cursor =
+                            fixing_sel.cursor.forward_n(to_yank.len_chars(), &self.text);
+                    } else {
+                        fixing_sel.anchor =
+                            fixing_sel.cursor.forward_n(to_yank.len_chars(), &self.text);
+                    }
+                }
+                for fixing_i in 0..i {
+                    let fixing_sel = &mut self.selections[insertion_points[fixing_i].0];
+                    if *idx <= fixing_sel.cursor.align(&self.text).to_idx(&self.text) {
+                        fixing_sel.cursor =
+                            fixing_sel.cursor.forward_n(to_yank.len_chars(), &self.text);
+                    }
+                    if *idx <= fixing_sel.anchor.align(&self.text).to_idx(&self.text) {
+                        fixing_sel.anchor =
+                            fixing_sel.anchor.forward_n(to_yank.len_chars(), &self.text);
                     }
                 }
             }
-        });
+        }
+    }
+
+    fn paste_extend(&mut self, yanked: &[Rope]) {
+        let mut insertion_points = self
+            .for_each_enumerated_selection(|i, sel, text| (i, sel.cursor.align(text).to_idx(text)));
+        insertion_points.sort_by_key(|&(_, idx)| idx);
+        insertion_points.reverse();
+
+        // we insert from the back, fixing idx past the insertion every time
+        // this is O(n^2) while it could be O(n)
+        for (i, (_, idx)) in insertion_points.iter().enumerate() {
+            if let Some(to_yank) = yanked.get(i) {
+                for chunk in to_yank.chunks() {
+                    self.text.insert(idx.0, chunk);
+                }
+                {
+                    let fixing_sel = &mut self.selections[insertion_points[i].0];
+                    if fixing_sel.align(&self.text).is_forward().unwrap_or(true) {
+                        fixing_sel.cursor =
+                            fixing_sel.cursor.forward_n(to_yank.len_chars(), &self.text);
+                    } else {
+                        fixing_sel.anchor =
+                            fixing_sel.anchor.forward_n(to_yank.len_chars(), &self.text);
+                    }
+                }
+                for fixing_i in 0..i {
+                    let fixing_sel = &mut self.selections[insertion_points[fixing_i].0];
+                    if *idx <= fixing_sel.cursor.align(&self.text).to_idx(&self.text) {
+                        fixing_sel.cursor =
+                            fixing_sel.cursor.forward_n(to_yank.len_chars(), &self.text);
+                    }
+                    if *idx <= fixing_sel.anchor.align(&self.text).to_idx(&self.text) {
+                        fixing_sel.anchor =
+                            fixing_sel.anchor.forward_n(to_yank.len_chars(), &self.text);
+                    }
+                }
+            }
+        }
+
+        // self.for_each_enumerated_selection_mut(|i, sel, text| {
+        //     if let Some(to_yank) = yanked.get(i) {
+        //         for chunk in to_yank.chunks() {
+        //             let aligned_cursor = sel.cursor.align(text);
+        //             text.insert(aligned_cursor.to_idx(text).into(), chunk);
+        //             if !sel.align(text).is_forward().unwrap_or(false) {
+        //                 sel.anchor = sel.anchor.forward_n(chunk.len(), text);
+        //                 sel.cursor = sel.cursor.forward_n(chunk.len(), text);
+        //             }
+        //         }
+        //     }
+        // });
     }
 
     fn backspace(&mut self) {
@@ -763,6 +903,9 @@ impl Mode for NormalMode {
             }
             Key::Char('p') => {
                 state.buffer.paste(&state.yanked);
+            }
+            Key::Char('P') => {
+                state.buffer.paste_extend(&state.yanked);
             }
             Key::Char('w') => {
                 state.buffer.move_cursor(CoordUnaligned::forward_word);
