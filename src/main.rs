@@ -346,9 +346,9 @@ impl Default for Buffer {
 }
 
 impl Buffer {
-    fn for_each_selection_mut<F>(&mut self, mut f: F)
+    fn for_each_selection_mut<F, R>(&mut self, mut f: F) -> Vec<R>
     where
-        F: FnMut(&mut SelectionUnaligned, &mut Rope),
+        F: FnMut(&mut SelectionUnaligned, &mut Rope) -> R,
     {
         let Self {
             ref mut selections,
@@ -356,7 +356,7 @@ impl Buffer {
             ..
         } = *self;
 
-        selections.iter_mut().for_each(|sel| f(sel, text));
+        selections.iter_mut().map(|sel| f(sel, text)).collect()
     }
 
     fn is_idx_selected(&self, idx: Idx) -> bool {
@@ -431,7 +431,7 @@ impl Buffer {
             let new_cursor = f(sel.cursor, text);
             sel.anchor = sel.cursor;
             sel.cursor = new_cursor;
-        })
+        });
     }
 
     fn extend_cursor<F>(&mut self, f: F)
@@ -440,7 +440,7 @@ impl Buffer {
     {
         self.for_each_selection_mut(|sel, text| {
             sel.cursor = f(sel.cursor, text);
-        })
+        });
     }
 
     fn move_cursor_backward(&mut self) {
