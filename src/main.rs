@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod prelude;
 
 use self::prelude::*;
@@ -12,6 +14,15 @@ use termion::raw::IntoRawMode;
 use termion::screen::*;
 
 use ropey::Rope;
+
+fn sub_rope(text: &Rope, start: usize, end: usize) -> Rope {
+    let mut text = text.clone();
+
+    text.remove(..start);
+    text.remove(end..);
+
+    text
+}
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 /// Coordinate where the column can exceed the line length
@@ -320,25 +331,29 @@ impl Selection {
 struct Buffer {
     text: ropey::Rope,
     selections: Vec<SelectionUnaligned>,
+    primary_sel_i: usize,
 }
 
 impl Default for Buffer {
     fn default() -> Self {
+        let sel = SelectionUnaligned::default();
         Self {
             text: Rope::default(),
-            selections: vec![SelectionUnaligned::default()],
+            selections: vec![sel],
+            primary_sel_i: 0,
         }
     }
 }
 
 impl Buffer {
-    fn for_each_selection_mut<F>(&mut self, f: F)
+    fn for_each_selection_mut<F>(&mut self, mut f: F)
     where
-        F: Fn(&mut SelectionUnaligned, &mut Rope),
+        F: FnMut(&mut SelectionUnaligned, &mut Rope),
     {
         let Self {
             ref mut selections,
             ref mut text,
+            ..
         } = *self;
 
         selections.iter_mut().for_each(|sel| f(sel, text));
@@ -364,11 +379,28 @@ impl Buffer {
         });
     }
 
-    fn delete(&mut self) {
+    fn delete(&mut self) -> Vec<Rope> {
+        let mut yanked = vec![];
         self.for_each_selection_mut(|sel, text| {
-            text.remove(sel.align(text).sorted_range_usize());
+            let range = sel.align(text).sorted_range_usize();
+            yanked.push(sub_rope(text, range.start, range.end));
+            text.remove(range);
             *sel = sel.collapsed();
         });
+        yanked
+    }
+
+    fn yank(&mut self) -> Vec<Rope> {
+        let mut yanked = vec![];
+        self.for_each_selection_mut(|sel, text| {
+            let range = sel.align(text).sorted_range_usize();
+            yanked.push(sub_rope(text, range.start, range.end));
+        });
+        yanked
+    }
+
+    fn paste(&mut self, _yanked: &[Rope]) {
+        unimplemented!()
     }
 
     fn backspace(&mut self) {
@@ -496,6 +528,18 @@ impl Mode for NormalMode {
             Key::Char('q') => {
                 state.quit = true;
             }
+            Key::Left => {
+                state.buffer.move_cursor_backward();
+            }
+            Key::Right => {
+                state.buffer.move_cursor_forward();
+            }
+            Key::Up => {
+                state.buffer.move_cursor_up();
+            }
+            Key::Down => {
+                state.buffer.move_cursor_down();
+            }
             Key::Char('i') => {
                 state.modes.push(Arc::new(InsertMode));
             }
@@ -551,6 +595,7 @@ struct State {
     quit: bool,
     modes: Vec<Arc<Mode>>,
     buffer: Buffer,
+    yanked: Vec<Rope>,
 }
 
 struct Breeze {
