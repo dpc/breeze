@@ -14,9 +14,6 @@ use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 use termion::screen::*;
 
-
-
-
 use ropey::Rope;
 
 fn sub_rope(text: &Rope, start: usize, end: usize) -> Rope {
@@ -229,20 +226,24 @@ impl Idx {
                 break;
             }
             let prev = cur.saturating_sub(1);
-            if prev == 0 || text.char(prev).is_alphanumeric() {
+            let ch = text.char(prev);
+            if prev > 0 && !ch.is_alphanumeric() {
+                cur -= 1;
+            } else {
                 break;
             }
-            cur -= 1;
         }
         loop {
             if cur == 0 {
                 break;
             }
             let prev = cur.saturating_sub(1);
-            if !text.char(prev).is_alphanumeric() {
+            let ch = text.char(prev);
+            if ch.is_alphanumeric() && ch != '\n' {
+                cur -= 1;
+            } else {
                 break;
             }
-            cur -= 1;
         }
         Idx(cur)
     }
@@ -250,17 +251,39 @@ impl Idx {
     fn forward_word(self, text: &Rope) -> Idx {
         let mut cur = self.0;
         let text_len = text.len_chars();
+
         loop {
-            if cur == text_len || !text.char(cur).is_alphanumeric() {
+            if cur == text_len {
                 break;
             }
-            cur += 1;
+            let ch = text.char(cur);
+            if ch == '\n' {
+                cur += 1;
+            } else {
+                break;
+            }
         }
         loop {
-            if cur == text_len || text.char(cur).is_alphanumeric() {
+            if cur == text_len {
                 break;
             }
-            cur += 1;
+            let ch = text.char(cur);
+            if ch.is_alphanumeric() {
+                cur += 1;
+            } else {
+                break;
+            }
+        }
+        loop {
+            if cur == text_len {
+                break;
+            }
+            let ch = text.char(cur);
+            if !ch.is_alphanumeric() && ch != '\n' {
+                cur += 1;
+            } else {
+                break;
+            }
         }
         Idx(cur)
     }
