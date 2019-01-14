@@ -54,6 +54,10 @@ impl CoordUnaligned {
         f(self.align(text), text).into()
     }
 
+    fn to_idx(self, text: &Rope) -> Idx {
+        self.align(text).to_idx(text)
+    }
+
     fn forward(self, text: &Rope) -> Self {
         self.map_as_coord(text, Coord::forward)
     }
@@ -567,6 +571,9 @@ impl Buffer {
         let res = self.for_each_enumerated_selection_mut(|i, sel, text| {
             let range = sel.align(text).sorted_range_usize();
             let yanked = sub_rope(text, range.start, range.end);
+            eprintln!("before collapse: {:?}", sel);
+            *sel = sel.collapsed();
+            eprintln!("after collapse: {:?}", sel);
             (yanked, i, range)
         });
         let mut removal_points = vec![];
@@ -577,22 +584,7 @@ impl Buffer {
             yanked.push(y);
         }
 
-        removal_points.sort_by_key(|&(_, ref range)| range.start);
-        removal_points.reverse();
-
-        // we remove from the back, fixing idx past the removal every time
-        // this is O(n^2) while it could be O(n)
-        for (i, (_, range)) in removal_points.iter().enumerate() {
-            self.text.remove(range.clone());
-            for fixing_i in 0..=i {
-                let fixing_sel = &mut self.selections[removal_points[fixing_i].0];
-                eprintln!("{:?}", fixing_sel);
-                fixing_sel.cursor =
-                    max(fixing_sel.cursor, fixing_sel.anchor).backward_n(range.len(), &self.text);
-                eprintln!("{:?}", fixing_sel);
-                *fixing_sel = fixing_sel.collapsed();
-            }
-        }
+        self.remove_ranges(removal_points);
 
         yanked
     }
@@ -679,43 +671,73 @@ impl Buffer {
                 }
             }
         }
+    }
 
-        // self.for_each_enumerated_selection_mut(|i, sel, text| {
-        //     if let Some(to_yank) = yanked.get(i) {
-        //         for chunk in to_yank.chunks() {
-        //             let aligned_cursor = sel.cursor.align(text);
-        //             text.insert(aligned_cursor.to_idx(text).into(), chunk);
-        //             if !sel.align(text).is_forward().unwrap_or(false) {
-        //                 sel.anchor = sel.anchor.forward_n(chunk.len(), text);
-        //                 sel.cursor = sel.cursor.forward_n(chunk.len(), text);
-        //             }
-        //         }
-        //     }
-        // });
+    /// Remove text at given ranges
+    ///
+    /// `removal_points` contains list of `(selection_index, range)`,
+    fn remove_ranges(&mut self, mut removal_points: Vec<(usize, std::ops::Range<usize>)>) {
+        removal_points.sort_by_key(|&(_, ref range)| range.start);
+        removal_points.reverse();
+
+        // we remove from the back, fixing idx past the removal every time
+        // this is O(n^2) while it could be O(n)
+        for (_, (_, range)) in removal_points.iter().enumerate() {
+            self.sub_to_every_selection_after(Idx(range.start), range.len());
+            // remove has to be after fixes, otherwise to_idx conversion
+            // will use the new buffer content, which will give wrong results
+            self.text.remove(range.clone());
+        }
     }
 
     fn backspace(&mut self) {
-        self.for_each_selection_mut(|sel, text| {
+        let removal_points = self.for_each_enumerated_selection_mut(|i, sel, text| {
             let sel_aligned = sel.align(text);
-            if sel_aligned.cursor == 0usize.into() {
-                return;
-            }
+            let range = (sel_aligned.cursor.0 - 1)..sel_aligned.cursor.0;
+            *sel = sel.collapsed();
 
-            match sel_aligned.is_forward() {
-                Some(true) => {
-                    sel.cursor = sel.cursor.backward(text);
-                }
-                _ => {
-                    sel.cursor = sel.cursor.backward(text);
-                    sel.anchor = sel.anchor.backward(text);
-                }
-            }
-
-            text.remove((sel_aligned.cursor.0 - 1)..sel_aligned.cursor.0);
+            (i, range)
         });
 
+        self.remove_ranges(removal_points);
+    }
+
+    fn add_to_every_selection_after(&mut self, idx: Idx, offset: usize) {
         self.for_each_selection_mut(|sel, text| {
-            *sel = sel.trim(text);
+            let cursor_idx = sel.cursor.to_idx(text);
+            let anchor_idx = sel.cursor.to_idx(text);
+
+            if idx <= cursor_idx {
+                sel.cursor = Idx(cursor_idx.0.saturating_add(offset))
+                    .to_coord(text)
+                    .into();
+            }
+            if idx <= anchor_idx {
+                sel.anchor = Idx(anchor_idx.0.saturating_add(offset))
+                    .to_coord(text)
+                    .into();
+            }
+        });
+    }
+
+    fn sub_to_every_selection_after(&mut self, idx: Idx, offset: usize) {
+        self.for_each_selection_mut(|sel, text| {
+            let cursor_idx = sel.cursor.to_idx(text);
+            let anchor_idx = sel.anchor.to_idx(text);
+            eprintln!("sub offset: {}", offset);
+            eprintln!("cursor: {:?} < {:?} ?", idx, cursor_idx);
+            if idx < cursor_idx {
+                sel.cursor = Idx(cursor_idx.0.saturating_sub(offset))
+                    .to_coord(text)
+                    .into();
+            }
+            eprintln!("anchor: {:?} < {:?} ?", idx, anchor_idx);
+            if idx < anchor_idx {
+                sel.anchor = Idx(anchor_idx.0.saturating_sub(offset))
+                    .to_coord(text)
+                    .into();
+            }
+            eprintln!("anchor: {:?} cursor: {:?} ?", sel.anchor, sel.cursor);
         });
     }
 
