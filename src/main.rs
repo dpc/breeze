@@ -6,6 +6,7 @@ use self::prelude::*;
 
 use std::sync::Arc;
 
+use std::cmp::min;
 use std::io::Write;
 use termion::color;
 use termion::event::Key;
@@ -13,18 +14,23 @@ use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 use termion::screen::*;
 
+
+
+
 use ropey::Rope;
 
 fn sub_rope(text: &Rope, start: usize, end: usize) -> Rope {
-    let mut text = text.clone();
+    let mut sub = text.clone();
 
     eprintln!("{} {} {}", line!(), start, end);
-    text.remove(..start);
-    if end < text.len_chars() {
-        text.remove(end..text.len_chars());
-    }
+    assert!(start <= end);
 
-    text
+    if end < text.len_chars() {
+        sub.remove(end..text.len_chars());
+    }
+    sub.remove(..start);
+
+    sub
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
@@ -58,12 +64,25 @@ impl CoordUnaligned {
     fn forward_n(self, n: usize, text: &Rope) -> Self {
         self.map_as_coord(text, |coord, text| coord.forward_n(n, text))
     }
+
+    fn forward_to_line_end(self, text: &Rope) -> Self {
+        self.map_as_coord(text, |coord, text| coord.forward_to_line_end(text))
+    }
+
+    fn forward_past_line_end(self, text: &Rope) -> Self {
+        self.map_as_coord(text, |coord, text| coord.forward_past_line_end(text))
+    }
+
     fn backward(self, text: &Rope) -> Self {
         self.map_as_coord(text, Coord::backward)
     }
 
     fn backward_word(self, text: &Rope) -> Self {
         self.map_as_coord(text, Coord::backward_word)
+    }
+
+    fn backward_to_line_start(self, text: &Rope) -> Self {
+        self.map_as_coord(text, |coord, text| coord.backward_to_line_start(text))
     }
 
     fn forward_word(self, text: &Rope) -> Self {
@@ -111,6 +130,13 @@ impl CoordUnaligned {
             column: trimed_column,
         }
     }
+
+    fn trim(self, text: &Rope) -> Self {
+        Self {
+            column: self.column,
+            line: min(self.line, text.len_lines().saturating_sub(1)),
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -150,6 +176,19 @@ impl Coord {
     fn forward_n(self, n: usize, text: &Rope) -> Self {
         Self::from_idx(self.to_idx(text).forward_n(n, text), text)
     }
+
+    fn forward_to_line_end(self, text: &Rope) -> Self {
+        Self::from_idx(self.to_idx(text).forward_to_line_end(text), text)
+    }
+
+    fn forward_past_line_end(self, text: &Rope) -> Self {
+        Self::from_idx(self.to_idx(text).forward_past_line_end(text), text)
+    }
+
+    fn backward_to_line_start(self, text: &Rope) -> Self {
+        Self::from_idx(self.to_idx(text).backward_to_line_start(text), text)
+    }
+
     fn backward(self, text: &Rope) -> Self {
         self.map_as_idx(text, |idx| idx.backward(text))
     }
@@ -225,6 +264,42 @@ impl Idx {
         }
         Idx(cur)
     }
+
+    fn forward_to_line_end(self, text: &Rope) -> Idx {
+        let mut cur = self.0;
+        let text_len = text.len_chars();
+        if cur == text_len || text.char(cur) == '\n' {
+            // nothing
+        } else {
+            cur += 1;
+        }
+        loop {
+            if cur == text_len || text.char(cur) == '\n' {
+                break;
+            }
+            cur += 1;
+        }
+        Idx(cur)
+    }
+
+    fn forward_past_line_end(self, text: &Rope) -> Idx {
+        self.forward_to_line_end(text).forward(text)
+    }
+
+    fn backward_to_line_start(self, text: &Rope) -> Idx {
+        let mut cur = std::cmp::min(self.0, text.len_chars().saturating_sub(1));
+        loop {
+            if cur == 0 {
+                break;
+            }
+            let prev = cur.saturating_sub(1);
+            if text.char(prev) == '\n' {
+                break;
+            }
+            cur -= 1;
+        }
+        Idx(cur)
+    }
 }
 
 impl From<usize> for Idx {
@@ -252,6 +327,13 @@ impl SelectionUnaligned {
         Selection {
             anchor: self.anchor.align(text).to_idx(text),
             cursor: self.cursor.align(text).to_idx(text),
+        }
+    }
+
+    fn trim(self, text: &Rope) -> Self {
+        Self {
+            anchor: self.anchor.trim(text),
+            cursor: self.cursor.trim(text),
         }
     }
 
@@ -390,6 +472,7 @@ impl Buffer {
             .map(|(i, sel)| f(i, sel, text))
             .collect()
     }
+
     fn is_idx_selected(&self, idx: Idx) -> bool {
         self.selections
             .iter()
@@ -411,13 +494,19 @@ impl Buffer {
     }
 
     fn delete(&mut self) -> Vec<Rope> {
-        self.for_each_selection_mut(|sel, text| {
+        let yanked = self.for_each_selection_mut(|sel, text| {
             let range = sel.align(text).sorted_range_usize();
             let yanked = sub_rope(text, range.start, range.end);
             text.remove(range);
-            *sel = sel.collapsed();
+            *sel = sel.collapsed().trim(text);
             yanked
-        })
+        });
+
+        self.for_each_selection_mut(|sel, text| {
+            *sel = sel.trim(text);
+        });
+
+        yanked
     }
 
     fn yank(&mut self) -> Vec<Rope> {
@@ -433,8 +522,10 @@ impl Buffer {
                 for chunk in to_yank.chunks() {
                     let aligned_cursor = sel.cursor.align(text);
                     text.insert(aligned_cursor.to_idx(text).into(), chunk);
-
-                    sel.cursor = sel.cursor.forward_n(chunk.len(), text);
+                    if !sel.align(text).is_forward().unwrap_or(false) {
+                        sel.anchor = sel.anchor.forward_n(chunk.len(), text);
+                        sel.cursor = sel.cursor.forward_n(chunk.len(), text);
+                    }
                 }
             }
         });
@@ -447,7 +538,6 @@ impl Buffer {
                 return;
             }
 
-            text.remove((sel_aligned.cursor.0 - 1)..sel_aligned.cursor.0);
             match sel_aligned.is_forward() {
                 Some(true) => {
                     sel.cursor = sel.cursor.backward(text);
@@ -457,6 +547,12 @@ impl Buffer {
                     sel.anchor = sel.anchor.backward(text);
                 }
             }
+
+            text.remove((sel_aligned.cursor.0 - 1)..sel_aligned.cursor.0);
+        });
+
+        self.for_each_selection_mut(|sel, text| {
+            *sel = sel.trim(text);
         });
     }
 
@@ -477,6 +573,17 @@ impl Buffer {
     {
         self.for_each_selection_mut(|sel, text| {
             sel.cursor = f(sel.cursor, text);
+        });
+    }
+
+    fn change_selection<F>(&mut self, f: F)
+    where
+        F: Fn(CoordUnaligned, CoordUnaligned, &Rope) -> (CoordUnaligned, CoordUnaligned),
+    {
+        self.for_each_selection_mut(|sel, text| {
+            let (new_cursor, new_anchor) = f(sel.cursor, sel.anchor, text);
+            sel.anchor = new_anchor;
+            sel.cursor = new_cursor;
         });
     }
 
@@ -503,8 +610,27 @@ impl Buffer {
     fn move_cursor_backward_word(&mut self) {
         self.move_cursor(CoordUnaligned::backward_word)
     }
+
     fn cursor_pos(&self) -> Coord {
         self.selections[0].cursor.align(&self.text)
+    }
+
+    fn move_line(&mut self) {
+        self.change_selection(|cursor, _anchor, text| {
+            (
+                cursor.forward_past_line_end(text),
+                cursor.backward_to_line_start(text),
+            )
+        });
+    }
+
+    fn extend_line(&mut self) {
+        self.change_selection(|cursor, anchor, text| {
+            (
+                cursor.forward_past_line_end(text),
+                anchor.backward_to_line_start(text),
+            )
+        });
     }
 }
 
@@ -624,6 +750,12 @@ impl Mode for NormalMode {
             }
             Key::Char('B') => {
                 state.buffer.extend_cursor(CoordUnaligned::backward_word);
+            }
+            Key::Char('x') => {
+                state.buffer.move_line();
+            }
+            Key::Char('X') => {
+                state.buffer.extend_line();
             }
             Key::Char('\'') | Key::Alt(';') => {
                 state.buffer.reverse_selections();
