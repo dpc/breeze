@@ -18,8 +18,11 @@ use ropey::Rope;
 fn sub_rope(text: &Rope, start: usize, end: usize) -> Rope {
     let mut text = text.clone();
 
+    eprintln!("{} {} {}", line!(), start, end);
     text.remove(..start);
-    text.remove(end..);
+    if end < text.len_chars() {
+        text.remove(end..text.len_chars());
+    }
 
     text
 }
@@ -52,6 +55,9 @@ impl CoordUnaligned {
         self.map_as_coord(text, Coord::forward)
     }
 
+    fn forward_n(self, n: usize, text: &Rope) -> Self {
+        self.map_as_coord(text, |coord, text| coord.forward_n(n, text))
+    }
     fn backward(self, text: &Rope) -> Self {
         self.map_as_coord(text, Coord::backward)
     }
@@ -83,15 +89,6 @@ impl CoordUnaligned {
         }
     }
 }
-#[derive(Copy, Clone, Debug, Default)]
-/// Coordinate where the row is known to be within the line length
-///
-/// Note: This is within the buffer this `Coord` was created to work
-/// in.
-struct Coord {
-    line: usize,
-    column: usize,
-}
 
 impl CoordUnaligned {
     /// Align to buffer
@@ -114,6 +111,16 @@ impl CoordUnaligned {
             column: trimed_column,
         }
     }
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+/// Coordinate where the row is known to be within the line length
+///
+/// Note: This is within the buffer this `Coord` was created to work
+/// in.
+struct Coord {
+    line: usize,
+    column: usize,
 }
 
 impl Coord {
@@ -140,6 +147,9 @@ impl Coord {
         Self::from_idx(self.to_idx(text).forward(text), text)
     }
 
+    fn forward_n(self, n: usize, text: &Rope) -> Self {
+        Self::from_idx(self.to_idx(text).forward_n(n, text), text)
+    }
     fn backward(self, text: &Rope) -> Self {
         self.map_as_idx(text, |idx| idx.backward(text))
     }
@@ -158,18 +168,15 @@ struct Idx(usize);
 
 impl Idx {
     fn backward(self, _text: &Rope) -> Self {
-        if 0 < self.0 {
-            Idx(self.0 - 1)
-        } else {
-            self
-        }
+        Idx(self.0.saturating_sub(1))
     }
+
     fn forward(self, text: &Rope) -> Self {
-        if self.0 < text.len_chars() {
-            Idx(self.0 + 1)
-        } else {
-            self
-        }
+        self.forward_n(1, text)
+    }
+
+    fn forward_n(self, n: usize, text: &Rope) -> Self {
+        Idx(std::cmp::min(self.0.saturating_add(n), text.len_chars()))
     }
 
     fn to_coord(self, text: &Rope) -> Coord {
@@ -177,15 +184,23 @@ impl Idx {
     }
 
     fn backward_word(self, text: &Rope) -> Idx {
-        let mut cur = self.0;
+        let mut cur = std::cmp::min(self.0, text.len_chars().saturating_sub(1));
         loop {
-            if cur == 0 || text.char(cur).is_alphanumeric() {
+            if cur == 0 {
+                break;
+            }
+            let prev = cur.saturating_sub(1);
+            if prev == 0 || text.char(prev).is_alphanumeric() {
                 break;
             }
             cur -= 1;
         }
         loop {
-            if cur == 0 || !text.char(cur).is_alphanumeric() {
+            if cur == 0 {
+                break;
+            }
+            let prev = cur.saturating_sub(1);
+            if !text.char(prev).is_alphanumeric() {
                 break;
             }
             cur -= 1;
@@ -197,13 +212,13 @@ impl Idx {
         let mut cur = self.0;
         let text_len = text.len_chars();
         loop {
-            if cur == text_len || text.char(cur).is_alphanumeric() {
+            if cur == text_len || !text.char(cur).is_alphanumeric() {
                 break;
             }
             cur += 1;
         }
         loop {
-            if cur == text_len || !text.char(cur).is_alphanumeric() {
+            if cur == text_len || text.char(cur).is_alphanumeric() {
                 break;
             }
             cur += 1;
@@ -359,6 +374,22 @@ impl Buffer {
         selections.iter_mut().map(|sel| f(sel, text)).collect()
     }
 
+    fn for_each_enumerated_selection_mut<F, R>(&mut self, mut f: F) -> Vec<R>
+    where
+        F: FnMut(usize, &mut SelectionUnaligned, &mut Rope) -> R,
+    {
+        let Self {
+            ref mut selections,
+            ref mut text,
+            ..
+        } = *self;
+
+        selections
+            .iter_mut()
+            .enumerate()
+            .map(|(i, sel)| f(i, sel, text))
+            .collect()
+    }
     fn is_idx_selected(&self, idx: Idx) -> bool {
         self.selections
             .iter()
@@ -380,27 +411,33 @@ impl Buffer {
     }
 
     fn delete(&mut self) -> Vec<Rope> {
-        let mut yanked = vec![];
         self.for_each_selection_mut(|sel, text| {
             let range = sel.align(text).sorted_range_usize();
-            yanked.push(sub_rope(text, range.start, range.end));
+            let yanked = sub_rope(text, range.start, range.end);
             text.remove(range);
             *sel = sel.collapsed();
-        });
-        yanked
+            yanked
+        })
     }
 
     fn yank(&mut self) -> Vec<Rope> {
-        let mut yanked = vec![];
         self.for_each_selection_mut(|sel, text| {
             let range = sel.align(text).sorted_range_usize();
-            yanked.push(sub_rope(text, range.start, range.end));
-        });
-        yanked
+            sub_rope(text, range.start, range.end)
+        })
     }
 
-    fn paste(&mut self, _yanked: &[Rope]) {
-        unimplemented!()
+    fn paste(&mut self, yanked: &[Rope]) {
+        self.for_each_enumerated_selection_mut(|i, sel, text| {
+            if let Some(to_yank) = yanked.get(i) {
+                for chunk in to_yank.chunks() {
+                    let aligned_cursor = sel.cursor.align(text);
+                    text.insert(aligned_cursor.to_idx(text).into(), chunk);
+
+                    sel.cursor = sel.cursor.forward_n(chunk.len(), text);
+                }
+            }
+        });
     }
 
     fn backspace(&mut self) {
@@ -568,7 +605,13 @@ impl Mode for NormalMode {
                 state.buffer.extend_cursor(CoordUnaligned::up_unaligned);
             }
             Key::Char('d') => {
-                state.buffer.delete();
+                state.yanked = state.buffer.delete();
+            }
+            Key::Char('y') => {
+                state.yanked = state.buffer.yank();
+            }
+            Key::Char('p') => {
+                state.buffer.paste(&state.yanked);
             }
             Key::Char('w') => {
                 state.buffer.move_cursor(CoordUnaligned::forward_word);
