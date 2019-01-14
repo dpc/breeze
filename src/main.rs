@@ -6,7 +6,7 @@ use self::prelude::*;
 
 use std::sync::Arc;
 
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::io::Write;
 use termion::color;
 use termion::event::Key;
@@ -30,7 +30,7 @@ fn sub_rope(text: &Rope, start: usize, end: usize) -> Rope {
     sub
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 /// Coordinate where the column can exceed the line length
 struct CoordUnaligned {
     line: usize,
@@ -639,7 +639,8 @@ impl Buffer {
     }
 
     fn move_line(&mut self) {
-        self.change_selection(|cursor, _anchor, text| {
+        self.change_selection(|cursor, anchor, text| {
+            let cursor = max(cursor, anchor);
             (
                 cursor.forward_past_line_end(text),
                 cursor.backward_to_line_start(text),
@@ -649,6 +650,7 @@ impl Buffer {
 
     fn extend_line(&mut self) {
         self.change_selection(|cursor, anchor, text| {
+            let (anchor, cursor) = (min(cursor, anchor), max(cursor, anchor));
             (
                 cursor.forward_past_line_end(text),
                 anchor.backward_to_line_start(text),
