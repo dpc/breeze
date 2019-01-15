@@ -6,7 +6,7 @@ use self::prelude::*;
 
 use std::sync::Arc;
 
-use std::cmp::{max, min};
+use std::cmp::min;
 use std::io::Write;
 use termion::color;
 use termion::event::Key;
@@ -350,6 +350,7 @@ impl From<Idx> for usize {
         idx.0
     }
 }
+
 /// Selection with `CoordUnaligned`
 ///
 /// An ordererd pair of indices in the buffer
@@ -461,6 +462,9 @@ impl Selection {
     }
 }
 
+/// Buffer
+///
+/// A file opened for edition + some state around
 #[derive(Debug, Clone)]
 struct Buffer {
     text: ropey::Rope,
@@ -801,7 +805,7 @@ impl Buffer {
     }
 
     fn move_line(&mut self) {
-        self.change_selection(|cursor, anchor, text| {
+        self.change_selection(|cursor, _anchor, text| {
             (
                 cursor.forward_past_line_end(text),
                 cursor.backward_to_line_start(text),
@@ -825,7 +829,9 @@ impl Buffer {
     }
 }
 
+/// Mode handles keypresses
 trait Mode {
+    /// Transform state into next state
     fn handle(&self, state: State, key: Key) -> State;
     fn name(&self) -> &str;
 }
@@ -959,6 +965,8 @@ impl Mode for NormalMode {
         state
     }
 }
+
+/// The editor state
 #[derive(Default, Clone)]
 struct State {
     quit: bool,
@@ -967,6 +975,9 @@ struct State {
     yanked: Vec<Rope>,
 }
 
+/// The editor instance
+///
+/// Screen drawing + state handling
 struct Breeze {
     state: State,
     screen: AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>,
@@ -1092,6 +1103,7 @@ impl Breeze {
         Ok(())
     }
 }
+
 fn main() -> Result<()> {
     Breeze::init()?.run()?;
     Ok(())
