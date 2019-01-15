@@ -802,7 +802,6 @@ impl Buffer {
 
     fn move_line(&mut self) {
         self.change_selection(|cursor, anchor, text| {
-            let cursor = max(cursor, anchor);
             (
                 cursor.forward_past_line_end(text),
                 cursor.backward_to_line_start(text),
@@ -812,10 +811,15 @@ impl Buffer {
 
     fn extend_line(&mut self) {
         self.change_selection(|cursor, anchor, text| {
-            let (anchor, cursor) = (min(cursor, anchor), max(cursor, anchor));
+            let anchor = min(cursor, anchor);
+
             (
                 cursor.forward_past_line_end(text),
-                anchor.backward_to_line_start(text),
+                if anchor.column == 0 {
+                    anchor
+                } else {
+                    anchor.backward_to_line_start(text)
+                },
             )
         });
     }
