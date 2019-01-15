@@ -616,7 +616,6 @@ impl Breeze {
 
     fn run(&mut self) -> Result<()> {
         self.draw_buffer()?;
-        self.screen.flush()?;
 
         let stdin = std::io::stdin();
         for c in stdin.keys() {
@@ -636,19 +635,26 @@ impl Breeze {
                 return Ok(());
             }
             self.draw_buffer()?;
-            self.screen.flush()?;
         }
         Ok(())
     }
 
     fn draw_buffer(&mut self) -> Result<()> {
+        self.screen.write_all(&self.draw_to_buf())?;
+        self.screen.flush()?;
+        Ok(())
+    }
+
+    fn draw_to_buf(&self) -> Vec<u8> {
+        let mut buf = vec![];
         write!(
-            self.screen,
+            &mut buf,
             "{}{}{}",
             color::Fg(color::Reset),
             color::Bg(color::Reset),
             termion::clear::All
-        )?;
+        )
+        .unwrap();
         let mut ch_idx = 0;
         for (line_i, line) in self
             .state
@@ -658,11 +664,7 @@ impl Breeze {
             .enumerate()
             .take(self.display_rows)
         {
-            write!(
-                self.screen,
-                "{}",
-                termion::cursor::Goto(1, line_i as u16 + 1)
-            )?;
+            write!(&mut buf, "{}", termion::cursor::Goto(1, line_i as u16 + 1)).unwrap();
             for (char_i, ch) in line.chars().enumerate().take(self.display_cols) {
                 let in_selection = self.state.buffer.is_idx_selected(Idx(ch_idx + char_i));
                 let ch = if ch == '\n' {
@@ -677,20 +679,22 @@ impl Breeze {
 
                 if in_selection {
                     write!(
-                        self.screen,
+                        &mut buf,
                         "{}{}{}",
                         color::Fg(color::AnsiValue(16)),
                         color::Bg(color::AnsiValue(4)),
                         ch
-                    )?;
+                    )
+                    .unwrap();
                 } else {
                     write!(
-                        self.screen,
+                        &mut buf,
                         "{}{}{}",
                         color::Fg(color::Reset),
                         color::Bg(color::Reset),
                         ch
-                    )?;
+                    )
+                    .unwrap();
                 }
             }
             ch_idx += line.len_chars();
@@ -698,23 +702,25 @@ impl Breeze {
 
         // status
         write!(
-            self.screen,
+            &mut buf,
             "{}{}{}{}",
             color::Fg(color::Reset),
             color::Bg(color::Reset),
             termion::cursor::Goto(1, self.display_rows as u16),
             self.state.modes.last().unwrap().name(),
-        )?;
+        )
+        .unwrap();
 
         // cursor
         let cursor = self.state.buffer.cursor_pos();
         write!(
-            self.screen,
+            &mut buf,
             "\x1b[6 q{}{}",
             termion::cursor::Goto(cursor.column as u16 + 1, cursor.line as u16 + 1),
             termion::cursor::Show,
-        )?;
-        Ok(())
+        )
+        .unwrap();
+        buf
     }
 }
 
