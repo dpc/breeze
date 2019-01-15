@@ -27,6 +27,14 @@ impl CoordUnaligned {
         f(self.align(text), text).into()
     }
 
+    fn map_as_coord_2<F>(self, text: &Rope, f: F) -> (Self, Self)
+    where
+        F: FnOnce(Coord, &Rope) -> (Coord, Coord),
+    {
+        let (a, b) = f(self.align(text), text);
+        (a.into(), b.into())
+    }
+
     pub fn to_idx(self, text: &Rope) -> Idx {
         self.align(text).to_idx(text)
     }
@@ -55,16 +63,16 @@ impl CoordUnaligned {
         self.map_as_coord(text, |coord, text| coord.backward_n(n, text))
     }
 
-    pub fn backward_word(self, text: &Rope) -> Self {
-        self.map_as_coord(text, Coord::backward_word)
+    pub fn backward_word(self, text: &Rope) -> (Self, Self) {
+        self.map_as_coord_2(text, Coord::backward_word)
     }
 
     pub fn backward_to_line_start(self, text: &Rope) -> Self {
         self.map_as_coord(text, |coord, text| coord.backward_to_line_start(text))
     }
 
-    pub fn forward_word(self, text: &Rope) -> Self {
-        self.map_as_coord(text, Coord::forward_word)
+    pub fn forward_word(self, text: &Rope) -> (Self, Self) {
+        self.map_as_coord_2(text, Coord::forward_word)
     }
 
     pub fn up_unaligned(self, _text: &Rope) -> Self {
@@ -135,6 +143,14 @@ impl Coord {
         Self::from_idx(f(self.to_idx(text)), text)
     }
 
+    pub fn map_as_idx_2<F>(self, text: &Rope, f: F) -> (Self, Self)
+    where
+        F: FnOnce(Idx) -> (Idx, Idx),
+    {
+        let (a, b) = f(self.to_idx(text));
+        (Self::from_idx(a, text), Self::from_idx(b, text))
+    }
+
     pub fn to_idx(self, text: &Rope) -> Idx {
         (text.line_to_char(self.line) + self.column).into()
     }
@@ -174,11 +190,12 @@ impl Coord {
     pub fn backward_n(self, n: usize, text: &Rope) -> Self {
         self.map_as_idx(text, |idx| idx.backward_n(n, text))
     }
-    pub fn forward_word(self, text: &Rope) -> Self {
-        self.map_as_idx(text, |idx| idx.forward_word(text))
+
+    pub fn forward_word(self, text: &Rope) -> (Self, Self) {
+        self.map_as_idx_2(text, |idx| idx.forward_word(text))
     }
 
-    pub fn backward_word(self, text: &Rope) -> Self {
-        self.map_as_idx(text, |idx| idx.backward_word(text))
+    pub fn backward_word(self, text: &Rope) -> (Self, Self) {
+        self.map_as_idx_2(text, |idx| idx.backward_word(text))
     }
 }

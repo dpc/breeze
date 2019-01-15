@@ -4,10 +4,12 @@ mod prelude;
 
 use self::prelude::*;
 
+use std::path::Path;
 use std::sync::Arc;
 
 use std::cmp::min;
 use std::io::Write;
+use structopt::StructOpt;
 use termion::color;
 use termion::event::Key;
 use termion::input::TermRead;
@@ -18,6 +20,7 @@ use ropey::Rope;
 
 mod coord;
 mod idx;
+mod opts;
 mod selection;
 
 use crate::{coord::*, idx::Idx, selection::*};
@@ -58,6 +61,13 @@ impl Default for Buffer {
 }
 
 impl Buffer {
+    fn from_text(text: Rope) -> Self {
+        Self {
+            text: text,
+            ..default()
+        }
+    }
+
     fn for_each_selection<F, R>(&self, mut f: F) -> Vec<R>
     where
         F: FnMut(&SelectionUnaligned, &Rope) -> R,
@@ -330,6 +340,17 @@ impl Buffer {
         });
     }
 
+    fn move_cursor_2<F>(&mut self, f: F)
+    where
+        F: Fn(CoordUnaligned, &Rope) -> (CoordUnaligned, CoordUnaligned),
+    {
+        self.for_each_selection_mut(|sel, text| {
+            let (new_anchor, new_cursor) = f(sel.cursor, text);
+            sel.anchor = new_anchor;
+            sel.cursor = new_cursor;
+        });
+    }
+
     fn extend_cursor<F>(&mut self, f: F)
     where
         F: Fn(CoordUnaligned, &Rope) -> CoordUnaligned,
@@ -339,6 +360,15 @@ impl Buffer {
         });
     }
 
+    fn extend_cursor_2<F>(&mut self, f: F)
+    where
+        F: Fn(CoordUnaligned, &Rope) -> (CoordUnaligned, CoordUnaligned),
+    {
+        self.for_each_selection_mut(|sel, text| {
+            let (_new_anchor, new_cursor) = f(sel.cursor, text);
+            sel.cursor = new_cursor;
+        });
+    }
     fn change_selection<F>(&mut self, f: F)
     where
         F: Fn(CoordUnaligned, CoordUnaligned, &Rope) -> (CoordUnaligned, CoordUnaligned),
@@ -367,11 +397,11 @@ impl Buffer {
     }
 
     fn move_cursor_forward_word(&mut self) {
-        self.move_cursor(CoordUnaligned::forward_word)
+        self.move_cursor_2(CoordUnaligned::forward_word)
     }
 
     fn move_cursor_backward_word(&mut self) {
-        self.move_cursor(CoordUnaligned::backward_word)
+        self.move_cursor_2(CoordUnaligned::backward_word)
     }
 
     fn cursor_pos(&self) -> Coord {
@@ -504,6 +534,10 @@ impl Mode for NormalMode {
             Key::Char('d') => {
                 state.yanked = state.buffer.delete();
             }
+            Key::Char('c') => {
+                state.yanked = state.buffer.delete();
+                state.modes.push(Arc::new(InsertMode));
+            }
             Key::Char('y') => {
                 state.yanked = state.buffer.yank();
             }
@@ -514,16 +548,16 @@ impl Mode for NormalMode {
                 state.buffer.paste_extend(&state.yanked);
             }
             Key::Char('w') => {
-                state.buffer.move_cursor(CoordUnaligned::forward_word);
+                state.buffer.move_cursor_2(CoordUnaligned::forward_word);
             }
             Key::Char('W') => {
-                state.buffer.extend_cursor(CoordUnaligned::forward_word);
+                state.buffer.extend_cursor_2(CoordUnaligned::forward_word);
             }
             Key::Char('b') => {
-                state.buffer.move_cursor(CoordUnaligned::backward_word);
+                state.buffer.move_cursor_2(CoordUnaligned::backward_word);
             }
             Key::Char('B') => {
-                state.buffer.extend_cursor(CoordUnaligned::backward_word);
+                state.buffer.extend_cursor_2(CoordUnaligned::backward_word);
             }
             Key::Char('x') => {
                 state.buffer.move_line();
@@ -572,6 +606,12 @@ impl Breeze {
             display_rows: rows as usize,
             screen,
         })
+    }
+
+    fn open(&mut self, path: &Path) -> Result<()> {
+        let text = Rope::from_reader(std::io::BufReader::new(std::fs::File::open(path)?))?;
+        self.state.buffer = Buffer::from_text(text);
+        Ok(())
     }
 
     fn run(&mut self) -> Result<()> {
@@ -679,6 +719,13 @@ impl Breeze {
 }
 
 fn main() -> Result<()> {
-    Breeze::init()?.run()?;
+    let opt = opts::Opts::from_args();
+    let mut brz = Breeze::init()?;
+
+    if let Some(path) = opt.input {
+        brz.open(&path)?;
+    }
+
+    brz.run()?;
     Ok(())
 }
