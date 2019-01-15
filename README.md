@@ -44,8 +44,7 @@ first.
 
 Some stuff works, but still very, very early. And considering how little time I have,
 it will probably stay this way for a long while. I might hack on it continously in the
-future, or I might loose the motivation. If you feel like you are interested in helping,
-I am happy to accept collaborators.
+future, or I might loose the motivation. I am happy to accept collaborators and help.
 
 ## Running
 

@@ -11,3 +11,7 @@ ropey = "*"
 termion = "*"
 default = "*"
 structopt = "*"
+
+[profile.dev]
+# stuff's too slow in `debug`
+opt-level = 1
