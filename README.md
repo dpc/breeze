@@ -14,9 +14,9 @@
 
 I have recently switched to [kakoune](http://kakoune.org/) after years (decades?)
 of using Vim. I think changing *action, movement* into *movement, action* is a
-brilliant idea. I also enjoy simplicity of Kakoune and am generally quite happy using it.
+brilliant idea. I enjoy simplicity of Kakoune and I am generally quite happy using it.
 
-However I have couple of ideas how how Kakoune could be better/disagree with couple
+However I have couple of ideas how Kakoune could be betterd and/or disagree with a couple
 of things in it.
 
 So I decided to hack together my own code editor to demonstrate / try them.
@@ -30,10 +30,11 @@ cursor anymore! Am I really the only one to figure it out?
 In Breeze `|` is the only cursor shape. It feels more like a graphical text editor,
 than traditional CLI ones.
 
-Kakoune seem very Vim-golf, centric. In Breeze the philosophy is slightly different.
+Kakoune seem very Vim-golf-centric. In Breeze the philosophy is slightly different.
 It doesn't matter to me in how many keystrokes one can perform certain editing operation.
-What matter instead is predictable, natural, easy to use modal text edition. Muscle
-memory and rapid keypressing without having to pay much attention is what I am aiming for.
+What matter to me most is predictable, natural, easy to use modal text edition. Muscle
+memory and rapid keypressing without having to pay much attention is what I am aiming for
+first.
 
 
 ## Status and plans
