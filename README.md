@@ -45,3 +45,20 @@ Some stuff works, but still very, very early. And considering how little time I 
 it will probably stay this way for a long while. I might hack on it continously in the
 future, or I might loose the motivation. If you feel like you are interested in helping,
 I am happy to accept collaborators.
+
+## Running
+
+If you don't have Rust installed go to https://rustup.rs
+
+Aftewards:
+
+```
+cargo run --release -- [file_path]
+```
+to run from source code, or
+
+```
+cargo install -f
+```
+
+to install.
