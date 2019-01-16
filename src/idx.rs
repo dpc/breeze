@@ -69,7 +69,7 @@ impl Idx {
             }
             let prev = cur.saturating_sub(1);
             let ch = text.char(prev);
-            if prev > 0 && char_category(text.char(start.saturating_sub(1))) == char_category(ch) {
+            if char_category(text.char(start.saturating_sub(1))) == char_category(ch) {
                 cur -= 1;
             } else {
                 break;
