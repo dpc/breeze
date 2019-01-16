@@ -78,19 +78,6 @@ impl io::Write for CachingAnsciWriter {
     }
 }
 
-fn sub_rope(text: &Rope, start: usize, end: usize) -> Rope {
-    let mut sub = text.clone();
-
-    assert!(start <= end);
-
-    if end < text.len_chars() {
-        sub.remove(end..text.len_chars());
-    }
-    sub.remove(..start);
-
-    sub
-}
-
 /// Buffer
 ///
 /// A file opened for edition + some state around
@@ -210,7 +197,7 @@ impl Buffer {
     fn delete(&mut self) -> Vec<Rope> {
         let res = self.for_each_enumerated_selection_mut(|i, sel, text| {
             let range = sel.align(text).sorted_range_usize();
-            let yanked = sub_rope(text, range.start, range.end);
+            let yanked = text.slice(range.clone()).into();
             *sel = sel.collapsed();
             (yanked, i, range)
         });
@@ -230,7 +217,7 @@ impl Buffer {
     fn yank(&mut self) -> Vec<Rope> {
         self.for_each_selection_mut(|sel, text| {
             let range = sel.align(text).sorted_range_usize();
-            sub_rope(text, range.start, range.end)
+            text.slice(range).into()
         })
     }
 
