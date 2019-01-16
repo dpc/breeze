@@ -77,7 +77,6 @@ impl io::Write for CachingAnsciWriter {
 fn sub_rope(text: &Rope, start: usize, end: usize) -> Rope {
     let mut sub = text.clone();
 
-    eprintln!("{} {} {}", line!(), start, end);
     assert!(start <= end);
 
     if end < text.len_chars() {
@@ -208,9 +207,7 @@ impl Buffer {
         let res = self.for_each_enumerated_selection_mut(|i, sel, text| {
             let range = sel.align(text).sorted_range_usize();
             let yanked = sub_rope(text, range.start, range.end);
-            eprintln!("before collapse: {:?}", sel);
             *sel = sel.collapsed();
-            eprintln!("after collapse: {:?}", sel);
             (yanked, i, range)
         });
         let mut removal_points = vec![];
@@ -361,20 +358,16 @@ impl Buffer {
         self.for_each_selection_mut(|sel, text| {
             let cursor_idx = sel.cursor.to_idx(text);
             let anchor_idx = sel.anchor.to_idx(text);
-            eprintln!("sub offset: {}", offset);
-            eprintln!("cursor: {:?} < {:?} ?", idx, cursor_idx);
             if idx < cursor_idx {
                 sel.cursor = Idx(cursor_idx.0.saturating_sub(offset))
                     .to_coord(text)
                     .into();
             }
-            eprintln!("anchor: {:?} < {:?} ?", idx, anchor_idx);
             if idx < anchor_idx {
                 sel.anchor = Idx(anchor_idx.0.saturating_sub(offset))
                     .to_coord(text)
                     .into();
             }
-            eprintln!("anchor: {:?} cursor: {:?} ?", sel.anchor, sel.cursor);
         });
     }
 
