@@ -25,6 +25,10 @@ mod selection;
 
 use crate::{coord::*, idx::Idx, selection::*};
 
+/// Keep track of color codes in output
+///
+/// This is to save on unnecessary output to terminal
+/// which can generated flickering etc.
 #[derive(Default)]
 struct CachingAnsciWriter {
     buf: Vec<u8>,
