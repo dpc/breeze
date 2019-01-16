@@ -8,7 +8,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use std::cmp::min;
-use std::io::Write;
+use std::io::{self, Write};
 use structopt::StructOpt;
 use termion::color;
 use termion::event::Key;
@@ -24,6 +24,55 @@ mod opts;
 mod selection;
 
 use crate::{coord::*, idx::Idx, selection::*};
+
+#[derive(Default)]
+struct CachingAnsciWriter {
+    buf: Vec<u8>,
+    cur_fg: Option<u8>,
+    cur_bg: Option<u8>,
+}
+
+impl CachingAnsciWriter {
+    fn into_vec(self) -> Vec<u8> {
+        self.buf
+    }
+
+    fn reset_color(&mut self) -> io::Result<()> {
+        if self.cur_fg.is_some() {
+            self.cur_fg = None;
+            write!(&mut self.buf, "{}", color::Fg(color::Reset),)?;
+        }
+
+        if self.cur_bg.is_some() {
+            self.cur_bg = None;
+            write!(&mut self.buf, "{}", color::Bg(color::Reset),)?;
+        }
+        Ok(())
+    }
+
+    fn change_color(&mut self, fg: color::AnsiValue, bg: color::AnsiValue) -> io::Result<()> {
+        if self.cur_fg != Some(fg.0) {
+            self.cur_fg = Some(fg.0);
+            write!(&mut self.buf, "{}", color::Fg(fg),)?;
+        }
+
+        if self.cur_bg != Some(bg.0) {
+            self.cur_bg = Some(bg.0);
+            write!(&mut self.buf, "{}", color::Bg(bg),)?;
+        }
+        Ok(())
+    }
+}
+
+impl io::Write for CachingAnsciWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.buf.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.buf.flush()
+    }
+}
 
 fn sub_rope(text: &Rope, start: usize, end: usize) -> Rope {
     let mut sub = text.clone();
@@ -646,15 +695,11 @@ impl Breeze {
     }
 
     fn draw_to_buf(&self) -> Vec<u8> {
-        let mut buf = vec![];
-        write!(
-            &mut buf,
-            "{}{}{}",
-            color::Fg(color::Reset),
-            color::Bg(color::Reset),
-            termion::clear::All
-        )
-        .unwrap();
+        let mut buf = CachingAnsciWriter::default();
+
+        buf.reset_color().unwrap();
+
+        write!(&mut buf, "{}", termion::clear::All).unwrap();
         let mut ch_idx = 0;
         for (line_i, line) in self
             .state
@@ -678,34 +723,22 @@ impl Breeze {
                 };
 
                 if in_selection {
-                    write!(
-                        &mut buf,
-                        "{}{}{}",
-                        color::Fg(color::AnsiValue(16)),
-                        color::Bg(color::AnsiValue(4)),
-                        ch
-                    )
-                    .unwrap();
+                    buf.change_color(color::AnsiValue(16), color::AnsiValue(4))
+                        .unwrap();
+                    write!(&mut buf, "{}", ch).unwrap();
                 } else {
-                    write!(
-                        &mut buf,
-                        "{}{}{}",
-                        color::Fg(color::Reset),
-                        color::Bg(color::Reset),
-                        ch
-                    )
-                    .unwrap();
+                    buf.reset_color().unwrap();
+                    write!(&mut buf, "{}", ch).unwrap();
                 }
             }
             ch_idx += line.len_chars();
         }
 
         // status
+        buf.reset_color().unwrap();
         write!(
             &mut buf,
-            "{}{}{}{}",
-            color::Fg(color::Reset),
-            color::Bg(color::Reset),
+            "{}{}",
             termion::cursor::Goto(1, self.display_rows as u16),
             self.state.modes.last().unwrap().name(),
         )
@@ -720,7 +753,7 @@ impl Breeze {
             termion::cursor::Show,
         )
         .unwrap();
-        buf
+        buf.into_vec()
     }
 }
 
