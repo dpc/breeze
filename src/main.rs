@@ -516,6 +516,8 @@ struct Breeze {
     screen: AlternateScreen<termion::raw::RawTerminal<std::io::Stdout>>,
     display_cols: usize,
     display_rows: usize,
+    prev_start_line: usize,
+    window_margin: usize,
 }
 
 impl Breeze {
@@ -527,6 +529,8 @@ impl Breeze {
             display_cols: 0,
             screen,
             display_rows: 0,
+            prev_start_line: 0,
+            window_margin: 0,
         };
         breeze.fix_size()?;
 
@@ -537,6 +541,7 @@ impl Breeze {
         let (cols, rows) = termion::terminal_size()?;
         self.display_cols = cols as usize;
         self.display_rows = rows as usize;
+        self.window_margin = self.display_rows / 5;
         Ok(())
     }
 
@@ -579,20 +584,39 @@ impl Breeze {
     }
 
     fn draw_buffer(&mut self) -> Result<()> {
-        self.screen.write_all(&self.draw_to_buf())?;
+        let buf = self.draw_to_buf();
+        self.screen.write_all(&buf)?;
         self.screen.flush()?;
         Ok(())
     }
 
-    fn draw_to_buf(&self) -> Vec<u8> {
+    fn draw_to_buf(&mut self) -> Vec<u8> {
         let mut buf = CachingAnsciWriter::default();
 
         buf.reset_color().unwrap();
 
         write!(&mut buf, "{}", termion::clear::All).unwrap();
+        let window_height = self.display_rows - 1;
         let cursor_pos = self.state.buffer.cursor_pos();
-        let start_line = cursor_pos.line.saturating_sub(self.display_rows / 2);
-        let end_line = start_line + self.display_rows - 1;
+        let max_start_line = cursor_pos.line.saturating_sub(self.window_margin);
+        let min_start_line = cursor_pos
+            .line
+            .saturating_add(self.window_margin)
+            .saturating_sub(window_height);
+        debug_assert!(min_start_line <= max_start_line);
+
+        if max_start_line < self.prev_start_line {
+            self.prev_start_line = max_start_line;
+        }
+        if self.prev_start_line < min_start_line {
+            self.prev_start_line = min_start_line;
+        }
+
+        let start_line = min(
+            self.prev_start_line,
+            self.state.buffer.text.len_lines() - window_height,
+        );
+        let end_line = start_line + window_height;
 
         let mut ch_idx = CoordUnaligned {
             line: start_line,
