@@ -135,6 +135,9 @@ impl Mode for NormalMode {
             Key::Char('X') => {
                 state.buffer.extend_line();
             }
+            Key::Char('%') => {
+                state.buffer.select_all();
+            }
             Key::Char('\'') | Key::Alt(';') => {
                 state.buffer.reverse_selections();
             }

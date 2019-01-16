@@ -464,6 +464,27 @@ impl Buffer {
             )
         });
     }
+
+    fn select_all(&mut self) {
+        self.selections = vec![SelectionUnaligned::from_selection(
+            if self.selections[self.primary_sel_i]
+                .align(&self.text)
+                .is_forward()
+                .unwrap_or(true)
+            {
+                Selection {
+                    anchor: Idx(0),
+                    cursor: Idx(self.text.len_chars()),
+                }
+            } else {
+                Selection {
+                    cursor: Idx(0),
+                    anchor: Idx(self.text.len_chars()),
+                }
+            },
+            &self.text,
+        )];
+    }
 }
 
 /// The editor state
