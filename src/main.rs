@@ -11,6 +11,7 @@ use std::cmp::min;
 use std::io::{self, Write};
 use structopt::StructOpt;
 use termion::color;
+use termion::event::Event;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 use termion::screen::*;
@@ -488,12 +489,23 @@ impl Buffer {
 }
 
 /// The editor state
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct State {
     quit: bool,
     modes: Vec<Arc<Mode>>,
     buffer: Buffer,
     yanked: Vec<Rope>,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        State {
+            quit: false,
+            modes: vec![Arc::new(NormalMode)],
+            buffer: default(),
+            yanked: vec![],
+        }
+    }
 }
 
 /// The editor instance
@@ -510,15 +522,22 @@ impl Breeze {
     fn init() -> Result<Self> {
         let screen = AlternateScreen::from(std::io::stdout().into_raw_mode().unwrap());
 
-        let mut state = State::default();
-        state.modes.push(Arc::new(NormalMode));
-        let (cols, rows) = termion::terminal_size()?;
-        Ok(Self {
-            state,
-            display_cols: cols as usize,
-            display_rows: rows as usize,
+        let mut breeze = Breeze {
+            state: default(),
+            display_cols: 0,
             screen,
-        })
+            display_rows: 0,
+        };
+        breeze.fix_size()?;
+
+        Ok(breeze)
+    }
+
+    fn fix_size(&mut self) -> Result<()> {
+        let (cols, rows) = termion::terminal_size()?;
+        self.display_cols = cols as usize;
+        self.display_rows = rows as usize;
+        Ok(())
     }
 
     fn open(&mut self, path: &Path) -> Result<()> {
@@ -531,15 +550,22 @@ impl Breeze {
         self.draw_buffer()?;
 
         let stdin = std::io::stdin();
-        for c in stdin.keys() {
-            match c {
-                Ok(key) => {
+        for e in stdin.events() {
+            match e {
+                Ok(Event::Key(key)) => {
                     self.state = self
                         .state
                         .modes
                         .last()
                         .expect("at least one mode")
                         .handle(self.state.clone(), key);
+                }
+                Ok(Event::Unsupported(_u)) => {
+                    eprintln!("{:?}", _u);
+                    self.fix_size()?;
+                }
+                Ok(Event::Mouse(_)) => {
+                    // no animal support yet
                 }
                 Err(e) => panic!("{}", e),
             }
@@ -564,35 +590,51 @@ impl Breeze {
         buf.reset_color().unwrap();
 
         write!(&mut buf, "{}", termion::clear::All).unwrap();
-        let mut ch_idx = 0;
-        for (line_i, line) in self
-            .state
-            .buffer
-            .text
-            .lines()
-            .enumerate()
-            .take(self.display_rows)
-        {
-            write!(&mut buf, "{}", termion::cursor::Goto(1, line_i as u16 + 1)).unwrap();
+        let cursor_pos = self.state.buffer.cursor_pos();
+        let start_line = cursor_pos.line.saturating_sub(self.display_rows / 2);
+        let end_line = start_line + self.display_rows - 1;
+
+        let mut ch_idx = CoordUnaligned {
+            line: start_line,
+            column: 0,
+        }
+        .to_idx(&self.state.buffer.text)
+        .0;
+
+        for (visual_line_i, line_i) in (start_line..end_line).enumerate() {
+            if line_i >= self.state.buffer.text.len_lines() {
+                break;
+            }
+
+            let line = self.state.buffer.text.line(line_i);
+
+            write!(
+                &mut buf,
+                "{}",
+                termion::cursor::Goto(1, visual_line_i as u16 + 1)
+            )
+            .unwrap();
             for (char_i, ch) in line.chars().enumerate().take(self.display_cols) {
                 let in_selection = self.state.buffer.is_idx_selected(Idx(ch_idx + char_i));
                 let ch = if ch == '\n' {
                     if in_selection {
-                        '·'
+                        Some('·')
                     } else {
-                        ' '
+                        None
                     }
                 } else {
-                    ch
+                    Some(ch)
                 };
 
-                if in_selection {
-                    buf.change_color(color::AnsiValue(16), color::AnsiValue(4))
-                        .unwrap();
-                    write!(&mut buf, "{}", ch).unwrap();
-                } else {
-                    buf.reset_color().unwrap();
-                    write!(&mut buf, "{}", ch).unwrap();
+                if let Some(ch) = ch {
+                    if in_selection {
+                        buf.change_color(color::AnsiValue(16), color::AnsiValue(4))
+                            .unwrap();
+                        write!(&mut buf, "{}", ch).unwrap();
+                    } else {
+                        buf.reset_color().unwrap();
+                        write!(&mut buf, "{}", ch).unwrap();
+                    }
                 }
             }
             ch_idx += line.len_chars();
@@ -609,11 +651,13 @@ impl Breeze {
         .unwrap();
 
         // cursor
-        let cursor = self.state.buffer.cursor_pos();
         write!(
             &mut buf,
             "\x1b[6 q{}{}",
-            termion::cursor::Goto(cursor.column as u16 + 1, cursor.line as u16 + 1),
+            termion::cursor::Goto(
+                cursor_pos.column as u16 + 1,
+                (cursor_pos.line - start_line) as u16 + 1
+            ),
             termion::cursor::Show,
         )
         .unwrap();
