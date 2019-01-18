@@ -23,7 +23,7 @@ So I decided to hack together my own code editor to demonstrate / try them.
 
 ## What is distinct about Breeze
 
-Rust. Life is to short not to use Rust.
+Rust. Life is too short not to use Rust.
 
 Terminals can do `|`-shaped cursors now, people! We don't have to use the blocky
 cursor anymore! Am I really the only one to figure it out?
