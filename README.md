@@ -16,7 +16,7 @@ I have recently switched to [kakoune](http://kakoune.org/) after years (decades?
 of using Vim. I think changing *action, movement* into *movement, action* is a
 brilliant idea. I enjoy simplicity of Kakoune and I am generally quite happy using it.
 
-However I have couple of ideas how Kakoune could be betterd and/or disagree with a couple
+However I have couple of ideas how Kakoune could be better and/or disagree with a couple
 of things in it.
 
 So I decided to hack together my own code editor to demonstrate / try them.
