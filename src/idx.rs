@@ -24,6 +24,14 @@ fn char_category(ch: char) -> CharCategory {
     }
 }
 
+fn char_is_newline(ch: char) -> bool {
+    ch == '\n'
+}
+
+fn char_is_not_newline(ch: char) -> bool {
+    ch != '\n'
+}
+
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Idx(pub usize);
 
@@ -113,20 +121,17 @@ impl Idx {
     }
 
     pub fn forward_to_line_end(self, text: &Rope) -> Idx {
-        let mut cur = self.0;
-        let text_len = text.len_chars();
-        if cur == text_len || text.char(cur) == '\n' {
-            // nothing
-        } else {
+        let mut cur = self;
+
+        while cur
+            .rightside_char(text)
+            .map(char_is_not_newline)
+            .unwrap_or(false)
+        {
             cur += 1;
         }
-        loop {
-            if cur == text_len || text.char(cur) == '\n' {
-                break;
-            }
-            cur += 1;
-        }
-        Idx(cur)
+
+        cur
     }
 
     pub fn forward_past_line_end(self, text: &Rope) -> Idx {
