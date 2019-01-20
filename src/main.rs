@@ -5,7 +5,6 @@ mod prelude;
 use self::prelude::*;
 
 use std::path::Path;
-use std::sync::Arc;
 
 use std::cmp::min;
 use std::io::{self, Write};
@@ -492,7 +491,7 @@ impl Buffer {
 #[derive(Clone)]
 pub struct State {
     quit: bool,
-    modes: Vec<Arc<Mode>>,
+    mode: Mode,
     buffer: Buffer,
     yanked: Vec<Rope>,
 }
@@ -501,7 +500,7 @@ impl Default for State {
     fn default() -> Self {
         State {
             quit: false,
-            modes: vec![Arc::new(NormalMode)],
+            mode: Mode::default(),
             buffer: default(),
             yanked: vec![],
         }
@@ -558,12 +557,7 @@ impl Breeze {
         for e in stdin.events() {
             match e {
                 Ok(Event::Key(key)) => {
-                    self.state = self
-                        .state
-                        .modes
-                        .last()
-                        .expect("at least one mode")
-                        .handle(self.state.clone(), key);
+                    self.state = self.state.mode.handle(self.state.clone(), key);
                 }
                 Ok(Event::Unsupported(_u)) => {
                     eprintln!("{:?}", _u);
@@ -670,7 +664,7 @@ impl Breeze {
             &mut buf,
             "{}{}",
             termion::cursor::Goto(1, self.display_rows as u16),
-            self.state.modes.last().unwrap().name(),
+            self.state.mode.name(),
         )
         .unwrap();
 

@@ -1,27 +1,45 @@
 use crate::coord::*;
 use crate::State;
-use std::sync::Arc;
+use default::default;
 use termion::event::Key;
 
-/// Mode handles keypresses
-pub trait Mode {
-    /// Transform state into next state
-    fn handle(&self, state: State, key: Key) -> State;
-    fn name(&self) -> &str;
+#[derive(Clone, Debug, Default)]
+pub struct Normal {
+    num_prefix: usize,
 }
 
-struct InsertMode;
-pub struct NormalMode;
+#[derive(Clone, Debug)]
+pub enum Mode {
+    Normal(Normal),
+    Insert,
+}
 
-impl Mode for InsertMode {
-    fn name(&self) -> &str {
-        "insert"
+impl Default for Mode {
+    fn default() -> Self {
+        self::Mode::Normal(default())
+    }
+}
+
+impl Mode {
+    pub fn name(&self) -> &str {
+        use self::Mode::*;
+        match self {
+            Normal(_) => "normal",
+            Insert => "insert",
+        }
+    }
+    pub fn handle(&self, state: State, key: Key) -> State {
+        use self::Mode::*;
+        match self {
+            Normal(normal) => normal.handle(state, key),
+            Insert => self.handle_insert(state, key),
+        }
     }
 
-    fn handle(&self, mut state: State, key: Key) -> State {
+    fn handle_insert(&self, mut state: State, key: Key) -> State {
         match key {
             Key::Esc => {
-                state.modes.pop();
+                state.mode = default();
             }
             Key::Char('\n') => {
                 state.buffer.insert('\n');
@@ -52,11 +70,7 @@ impl Mode for InsertMode {
     }
 }
 
-impl Mode for NormalMode {
-    fn name(&self) -> &str {
-        "normal"
-    }
-
+impl Normal {
     fn handle(&self, mut state: State, key: Key) -> State {
         match key {
             Key::Char('q') => {
@@ -75,7 +89,7 @@ impl Mode for NormalMode {
                 state.buffer.move_cursor_down();
             }
             Key::Char('i') => {
-                state.modes.push(Arc::new(InsertMode));
+                state.mode = crate::Mode::Insert;
             }
             Key::Char('h') => {
                 state.buffer.move_cursor(CoordUnaligned::backward);
@@ -106,7 +120,7 @@ impl Mode for NormalMode {
             }
             Key::Char('c') => {
                 state.yanked = state.buffer.delete();
-                state.modes.push(Arc::new(InsertMode));
+                state.mode = self::Mode::Insert;
             }
             Key::Char('y') => {
                 state.yanked = state.buffer.yank();
@@ -140,6 +154,11 @@ impl Mode for NormalMode {
             }
             Key::Char('\'') | Key::Alt(';') => {
                 state.buffer.reverse_selections();
+            }
+            Key::Char(n @ '0'..='9') => {
+                state.mode = Mode::Normal(Normal {
+                    num_prefix: self.num_prefix * 10 + n as usize - '0' as usize,
+                })
             }
             _ => {}
         }
