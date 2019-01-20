@@ -48,76 +48,68 @@ impl Idx {
     }
 
     pub fn backward_word(self, text: &Rope) -> (Idx, Idx) {
-        let mut cur = std::cmp::min(self.0, text.len_chars().saturating_sub(1));
+        let mut cur = self;
 
-        loop {
-            if cur == 0 {
-                break;
-            }
-            let prev = cur.saturating_sub(1);
-            let ch = text.char(prev);
-            if ch.is_whitespace() {
-                cur -= 1;
-            } else {
-                break;
-            }
+        while cur
+            .leftside_char(text)
+            .map(char::is_whitespace)
+            .unwrap_or(false)
+        {
+            cur -= 1;
         }
+
         let start = cur;
-        loop {
-            if cur == 0 {
-                break;
-            }
-            let prev = cur.saturating_sub(1);
-            let ch = text.char(prev);
-            if char_category(text.char(start.saturating_sub(1))) == char_category(ch) {
-                cur -= 1;
-            } else {
-                break;
-            }
+        let start_ch_category = start.leftside_char(text).map(char_category);
+
+        while cur.leftside_char(text).map(|ch| char_category(ch)) == start_ch_category
+            && start_ch_category.is_some()
+        {
+            cur -= 1;
         }
-        (Idx(start), Idx(cur))
+
+        (start, cur)
+    }
+
+    pub fn leftside_char(&self, text: &Rope) -> Option<char> {
+        if self.0 == 0 {
+            None
+        } else {
+            Some(text.char(self.0 - 1))
+        }
+    }
+
+    pub fn rightside_char(&self, text: &Rope) -> Option<char> {
+        if self.0 >= text.len_chars() {
+            None
+        } else {
+            Some(text.char(self.0))
+        }
     }
 
     pub fn forward_word(self, text: &Rope) -> (Idx, Idx) {
-        let mut cur = self.0;
-        let text_len = text.len_chars();
+        let mut cur = self;
 
-        loop {
-            if cur == text_len {
-                break;
-            }
-            let ch = text.char(cur);
-            if ch == '\n' {
-                cur += 1;
-            } else {
-                break;
-            }
+        while cur.rightside_char(text) == Some('\n') {
+            cur += 1;
         }
+
         let start = cur;
+        let start_ch_category = start.rightside_char(text).map(char_category);
 
-        loop {
-            if cur == text_len {
-                break;
-            }
-            let ch = text.char(cur);
-            if char_category(text.char(start)) == char_category(ch) {
-                cur += 1;
-            } else {
-                break;
-            }
+        while cur.rightside_char(text).map(|ch| char_category(ch)) == start_ch_category
+            && start_ch_category.is_some()
+        {
+            cur += 1;
         }
-        loop {
-            if cur == text_len {
-                break;
-            }
-            let ch = text.char(cur);
-            if ch.is_whitespace() && ch != '\n' {
-                cur += 1;
-            } else {
-                break;
-            }
+
+        while cur
+            .rightside_char(text)
+            .map(|ch| ch.is_whitespace() && ch != '\n')
+            .unwrap_or(false)
+        {
+            cur += 1;
         }
-        (Idx(start), Idx(cur))
+        (start, cur)
     }
 
     pub fn forward_to_line_end(self, text: &Rope) -> Idx {
@@ -142,18 +134,28 @@ impl Idx {
     }
 
     pub fn backward_to_line_start(self, text: &Rope) -> Idx {
-        let mut cur = std::cmp::min(self.0, text.len_chars().saturating_sub(1));
-        loop {
-            if cur == 0 {
-                break;
-            }
-            let prev = cur.saturating_sub(1);
-            if text.char(prev) == '\n' {
-                break;
-            }
+        let mut cur = self;
+
+        while cur
+            .leftside_char(text)
+            .map(|ch| ch != '\n')
+            .unwrap_or(false)
+        {
             cur -= 1;
         }
-        Idx(cur)
+        cur
+    }
+}
+
+impl std::ops::AddAssign<usize> for Idx {
+    fn add_assign(&mut self, rhs: usize) {
+        self.0 += rhs;
+    }
+}
+
+impl std::ops::SubAssign<usize> for Idx {
+    fn sub_assign(&mut self, rhs: usize) {
+        self.0 -= rhs;
     }
 }
 
