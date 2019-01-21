@@ -5,7 +5,7 @@ use termion::event::Key;
 
 #[derive(Clone, Debug, Default)]
 pub struct Normal {
-    num_prefix: usize,
+    num_prefix: Option<usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -33,7 +33,7 @@ impl Mode {
 
     pub fn get_num_prefix(&self) -> Option<usize> {
         if let Mode::Normal(normal) = self {
-            Some(normal.num_prefix)
+            normal.num_prefix
         } else {
             None
         }
@@ -138,6 +138,29 @@ impl Mode {
 impl Normal {
     fn handle(&self, mut state: State, key: Key) -> State {
         match key {
+            Key::Char(n @ '0'..='9') => {
+                state.mode = Mode::Normal(Normal {
+                    num_prefix: Some(
+                        self.num_prefix
+                            .unwrap_or(0)
+                            .saturating_mul(10)
+                            .saturating_add(n as usize - '0' as usize),
+                    ),
+                });
+                state
+            }
+            other => {
+                let mut state = self.handle_not_digit(state, other);
+                if let Mode::Normal(ref mut normal) = state.mode {
+                    normal.num_prefix = None;
+                }
+                state
+            }
+        }
+    }
+
+    fn handle_not_digit(&self, mut state: State, key: Key) -> State {
+        match key {
             Key::Esc => {
                 state.mode = Mode::default();
             }
@@ -145,10 +168,10 @@ impl Normal {
                 state.quit = true;
             }
             Key::Char('g') => {
-                if self.num_prefix > 0 {
+                if let Some(num_prefix) = self.num_prefix {
                     state
                         .buffer
-                        .move_cursor(|coord, text| coord.set_line(self.num_prefix, text));
+                        .move_cursor(|coord, text| coord.set_line(num_prefix, text));
                     state.mode = Mode::default();
                 } else {
                     state.mode = Mode::Goto
@@ -232,14 +255,6 @@ impl Normal {
             }
             Key::Char('\'') | Key::Alt(';') => {
                 state.buffer.reverse_selections();
-            }
-            Key::Char(n @ '0'..='9') => {
-                state.mode = Mode::Normal(Normal {
-                    num_prefix: self
-                        .num_prefix
-                        .saturating_mul(10)
-                        .saturating_add(n as usize - '0' as usize),
-                })
             }
             _ => {}
         }
