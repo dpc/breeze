@@ -66,16 +66,16 @@ impl Mode {
                 state.buffer.backspace();
             }
             Key::Left => {
-                state.buffer.move_cursor_backward();
+                state.buffer.move_cursor_backward(1);
             }
             Key::Right => {
-                state.buffer.move_cursor_forward();
+                state.buffer.move_cursor_forward(1);
             }
             Key::Up => {
-                state.buffer.move_cursor_up();
+                state.buffer.move_cursor_up(1);
             }
             Key::Down => {
-                state.buffer.move_cursor_down();
+                state.buffer.move_cursor_down(1);
             }
             Key::Char(ch) => {
                 if !ch.is_control() {
@@ -160,6 +160,7 @@ impl Normal {
     }
 
     fn handle_not_digit(&self, mut state: State, key: Key) -> State {
+        let times = self.num_prefix.unwrap_or(1);
         match key {
             Key::Esc => {
                 state.mode = Mode::default();
@@ -178,43 +179,43 @@ impl Normal {
                 }
             }
             Key::Left => {
-                state.buffer.move_cursor_backward();
+                state.buffer.move_cursor_backward(times);
             }
             Key::Right => {
-                state.buffer.move_cursor_forward();
+                state.buffer.move_cursor_forward(times);
             }
             Key::Up => {
-                state.buffer.move_cursor_up();
+                state.buffer.move_cursor_up(times);
             }
             Key::Down => {
-                state.buffer.move_cursor_down();
+                state.buffer.move_cursor_down(times);
             }
             Key::Char('i') => {
                 state.mode = crate::Mode::Insert;
             }
             Key::Char('h') => {
-                state.buffer.move_cursor(Coord::backward);
+                state.buffer.move_cursor_backward(times);
             }
             Key::Char('H') => {
-                state.buffer.extend_cursor(Coord::backward);
+                state.buffer.extend_cursor_backward(times);
             }
             Key::Char('l') => {
-                state.buffer.move_cursor(Coord::forward);
+                state.buffer.move_cursor_forward(times);
             }
             Key::Char('L') => {
-                state.buffer.extend_cursor(Coord::forward);
+                state.buffer.extend_cursor_forward(times);
             }
             Key::Char('j') => {
-                state.buffer.move_cursor(Coord::down_unaligned);
+                state.buffer.move_cursor_down(times);
             }
             Key::Char('J') => {
-                state.buffer.extend_cursor(Coord::down_unaligned);
+                state.buffer.extend_cursor_down(times);
             }
             Key::Char('k') => {
-                state.buffer.move_cursor(Coord::up_unaligned);
+                state.buffer.move_cursor_up(times);
             }
             Key::Char('K') => {
-                state.buffer.extend_cursor(Coord::up_unaligned);
+                state.buffer.extend_cursor_up(times);
             }
             Key::Char('d') => {
                 state.yanked = state.buffer.delete();

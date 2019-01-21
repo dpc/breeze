@@ -40,23 +40,16 @@ impl Coord {
         (text.line_to_char(trimed.line) + trimed.column).into()
     }
 
-    pub fn up_unaligned(self, _text: &Rope) -> Self {
+    pub fn up_unaligned(self, n: usize, _text: &Rope) -> Self {
         Self {
-            line: self.line.saturating_sub(1),
+            line: self.line.saturating_sub(n),
             column: self.column,
         }
     }
 
-    pub fn down_unaligned(self, text: &Rope) -> Self {
-        let lines = text.len_lines();
-        Self {
-            line: if self.line == lines || self.line + 1 == lines {
-                self.line
-            } else {
-                self.line + 1
-            },
-            column: self.column,
-        }
+    pub fn down_unaligned(mut self, n: usize, text: &Rope) -> Self {
+        self.line = self.line.saturating_add(n);
+        self.trim_line_to_buf(text)
     }
 
     /// Align to buffer
@@ -95,12 +88,8 @@ impl Coord {
         Self { line, column }
     }
 
-    pub fn forward(self, text: &Rope) -> Self {
-        Self::from_idx(self.to_idx(text).forward(text), text)
-    }
-
-    pub fn forward_n(self, n: usize, text: &Rope) -> Self {
-        Self::from_idx(self.to_idx(text).forward_n(n, text), text)
+    pub fn forward(self, n: usize, text: &Rope) -> Self {
+        Self::from_idx(self.to_idx(text).forward(n, text), text)
     }
 
     pub fn forward_to_line_end(self, text: &Rope) -> Self {
@@ -115,12 +104,8 @@ impl Coord {
         Self::from_idx(self.to_idx(text).backward_to_line_start(text), text)
     }
 
-    pub fn backward(self, text: &Rope) -> Self {
-        self.map_as_idx(text, |idx| idx.backward(text))
-    }
-
-    pub fn backward_n(self, n: usize, text: &Rope) -> Self {
-        self.map_as_idx(text, |idx| idx.backward_n(n, text))
+    pub fn backward(self, n: usize, text: &Rope) -> Self {
+        self.map_as_idx(text, |idx| idx.backward(n, text))
     }
 
     pub fn forward_word(self, text: &Rope) -> (Self, Self) {

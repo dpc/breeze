@@ -186,7 +186,7 @@ impl Buffer {
             self.text.insert_char(idx.0, ch);
             for fixing_i in 0..=i {
                 let fixing_sel = &mut self.selections[insertion_points[fixing_i].0];
-                fixing_sel.cursor = fixing_sel.cursor.forward(&self.text);
+                fixing_sel.cursor = fixing_sel.cursor.forward(1, &self.text);
                 *fixing_sel = fixing_sel.collapsed();
             }
         }
@@ -238,10 +238,10 @@ impl Buffer {
                     if fixing_sel.align(&self.text).is_forward().unwrap_or(true) {
                         fixing_sel.anchor = fixing_sel.cursor;
                         fixing_sel.cursor =
-                            fixing_sel.cursor.forward_n(to_yank.len_chars(), &self.text);
+                            fixing_sel.cursor.forward(to_yank.len_chars(), &self.text);
                     } else {
                         fixing_sel.anchor =
-                            fixing_sel.cursor.forward_n(to_yank.len_chars(), &self.text);
+                            fixing_sel.cursor.forward(to_yank.len_chars(), &self.text);
                     }
                 }
                 for fixing_i in 0..i {
@@ -253,7 +253,7 @@ impl Buffer {
                             .to_idx(&self.text)
                     {
                         fixing_sel.cursor =
-                            fixing_sel.cursor.forward_n(to_yank.len_chars(), &self.text);
+                            fixing_sel.cursor.forward(to_yank.len_chars(), &self.text);
                     }
                     if *idx
                         <= fixing_sel
@@ -262,7 +262,7 @@ impl Buffer {
                             .to_idx(&self.text)
                     {
                         fixing_sel.anchor =
-                            fixing_sel.anchor.forward_n(to_yank.len_chars(), &self.text);
+                            fixing_sel.anchor.forward(to_yank.len_chars(), &self.text);
                     }
                 }
             }
@@ -287,10 +287,10 @@ impl Buffer {
                     let fixing_sel = &mut self.selections[insertion_points[i].0];
                     if fixing_sel.align(&self.text).is_forward().unwrap_or(true) {
                         fixing_sel.cursor =
-                            fixing_sel.cursor.forward_n(to_yank.len_chars(), &self.text);
+                            fixing_sel.cursor.forward(to_yank.len_chars(), &self.text);
                     } else {
                         fixing_sel.anchor =
-                            fixing_sel.anchor.forward_n(to_yank.len_chars(), &self.text);
+                            fixing_sel.anchor.forward(to_yank.len_chars(), &self.text);
                     }
                 }
                 for fixing_i in 0..i {
@@ -302,7 +302,7 @@ impl Buffer {
                             .to_idx(&self.text)
                     {
                         fixing_sel.cursor =
-                            fixing_sel.cursor.forward_n(to_yank.len_chars(), &self.text);
+                            fixing_sel.cursor.forward(to_yank.len_chars(), &self.text);
                     }
                     if *idx
                         <= fixing_sel
@@ -311,7 +311,7 @@ impl Buffer {
                             .to_idx(&self.text)
                     {
                         fixing_sel.anchor =
-                            fixing_sel.anchor.forward_n(to_yank.len_chars(), &self.text);
+                            fixing_sel.anchor.forward(to_yank.len_chars(), &self.text);
                     }
                 }
             }
@@ -433,22 +433,37 @@ impl Buffer {
         });
     }
 
-    fn move_cursor_backward(&mut self) {
-        self.move_cursor(Coord::backward);
+    fn move_cursor_backward(&mut self, n: usize) {
+        self.move_cursor(|coord, text| coord.backward(n, text));
     }
 
-    fn move_cursor_forward(&mut self) {
-        self.move_cursor(Coord::forward);
+    fn move_cursor_forward(&mut self, n: usize) {
+        self.move_cursor(|coord, text| coord.forward(n, text));
     }
 
-    fn move_cursor_down(&mut self) {
-        self.move_cursor(Coord::down_unaligned);
+    fn move_cursor_down(&mut self, n: usize) {
+        self.move_cursor(|coord, text| coord.down_unaligned(n, text));
     }
 
-    fn move_cursor_up(&mut self) {
-        self.move_cursor(Coord::up_unaligned);
+    fn move_cursor_up(&mut self, n: usize) {
+        self.move_cursor(|coord, text| coord.up_unaligned(n, text));
     }
 
+    fn extend_cursor_backward(&mut self, n: usize) {
+        self.extend_cursor(|coord, text| coord.backward(n, text));
+    }
+
+    fn extend_cursor_forward(&mut self, n: usize) {
+        self.extend_cursor(|coord, text| coord.forward(n, text));
+    }
+
+    fn extend_cursor_down(&mut self, n: usize) {
+        self.extend_cursor(|coord, text| coord.down_unaligned(n, text));
+    }
+
+    fn extend_cursor_up(&mut self, n: usize) {
+        self.extend_cursor(|coord, text| coord.up_unaligned(n, text));
+    }
     fn move_cursor_forward_word(&mut self) {
         self.move_cursor_2(Coord::forward_word)
     }

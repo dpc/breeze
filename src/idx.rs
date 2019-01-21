@@ -36,18 +36,10 @@ fn char_is_not_newline(ch: char) -> bool {
 pub struct Idx(pub usize);
 
 impl Idx {
-    pub fn backward(self, _text: &Rope) -> Self {
-        Idx(self.0.saturating_sub(1))
-    }
-
-    pub fn backward_n(self, n: usize, _text: &Rope) -> Self {
+    pub fn backward(self, n: usize, _text: &Rope) -> Self {
         Idx(self.0.saturating_sub(n))
     }
-    pub fn forward(self, text: &Rope) -> Self {
-        self.forward_n(1, text)
-    }
-
-    pub fn forward_n(self, n: usize, text: &Rope) -> Self {
+    pub fn forward(self, n: usize, text: &Rope) -> Self {
         Idx(std::cmp::min(self.0.saturating_add(n), text.len_chars()))
     }
 
@@ -135,7 +127,7 @@ impl Idx {
     }
 
     pub fn forward_past_line_end(self, text: &Rope) -> Idx {
-        self.forward_to_line_end(text).forward(text)
+        self.forward_to_line_end(text).forward(1, text)
     }
 
     pub fn backward_to_line_start(self, text: &Rope) -> Idx {
