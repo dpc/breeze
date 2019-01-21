@@ -42,8 +42,8 @@ impl SelectionUnaligned {
 
     pub fn from_selection(sel: Selection, text: &Rope) -> Self {
         Self {
-            cursor: sel.cursor.to_coord(text).into(),
-            anchor: sel.anchor.to_coord(text).into(),
+            cursor: sel.cursor.to_coord(text),
+            anchor: sel.anchor.to_coord(text),
         }
     }
 }

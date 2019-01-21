@@ -69,7 +69,7 @@ impl Idx {
         let start = cur;
         let start_ch_category = start.leftside_char(text).map(char_category);
 
-        while cur.leftside_char(text).map(|ch| char_category(ch)) == start_ch_category
+        while cur.leftside_char(text).map(char_category) == start_ch_category
             && start_ch_category.is_some()
         {
             cur -= 1;
@@ -78,7 +78,7 @@ impl Idx {
         (start, cur)
     }
 
-    pub fn leftside_char(&self, text: &Rope) -> Option<char> {
+    pub fn leftside_char(self, text: &Rope) -> Option<char> {
         if self.0 == 0 {
             None
         } else {
@@ -86,7 +86,7 @@ impl Idx {
         }
     }
 
-    pub fn rightside_char(&self, text: &Rope) -> Option<char> {
+    pub fn rightside_char(self, text: &Rope) -> Option<char> {
         if self.0 >= text.len_chars() {
             None
         } else {
@@ -104,7 +104,7 @@ impl Idx {
         let start = cur;
         let start_ch_category = start.rightside_char(text).map(char_category);
 
-        while cur.rightside_char(text).map(|ch| char_category(ch)) == start_ch_category
+        while cur.rightside_char(text).map(char_category) == start_ch_category
             && start_ch_category.is_some()
         {
             cur += 1;

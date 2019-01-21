@@ -101,10 +101,7 @@ impl Default for Buffer {
 
 impl Buffer {
     fn from_text(text: Rope) -> Self {
-        Self {
-            text: text,
-            ..default()
-        }
+        Self { text, ..default() }
     }
 
     fn for_each_selection<F, R>(&self, mut f: F) -> Vec<R>
