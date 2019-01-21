@@ -387,7 +387,7 @@ impl Buffer {
 
     fn move_cursor<F>(&mut self, f: F)
     where
-        F: Fn(CoordUnaligned, &Rope) -> CoordUnaligned,
+        F: Fn(Coord, &Rope) -> Coord,
     {
         self.for_each_selection_mut(|sel, text| {
             let new_cursor = f(sel.cursor, text);
@@ -398,7 +398,7 @@ impl Buffer {
 
     fn move_cursor_2<F>(&mut self, f: F)
     where
-        F: Fn(CoordUnaligned, &Rope) -> (CoordUnaligned, CoordUnaligned),
+        F: Fn(Coord, &Rope) -> (Coord, Coord),
     {
         self.for_each_selection_mut(|sel, text| {
             let (new_anchor, new_cursor) = f(sel.cursor, text);
@@ -409,7 +409,7 @@ impl Buffer {
 
     fn extend_cursor<F>(&mut self, f: F)
     where
-        F: Fn(CoordUnaligned, &Rope) -> CoordUnaligned,
+        F: Fn(Coord, &Rope) -> Coord,
     {
         self.for_each_selection_mut(|sel, text| {
             sel.cursor = f(sel.cursor, text);
@@ -418,7 +418,7 @@ impl Buffer {
 
     fn extend_cursor_2<F>(&mut self, f: F)
     where
-        F: Fn(CoordUnaligned, &Rope) -> (CoordUnaligned, CoordUnaligned),
+        F: Fn(Coord, &Rope) -> (Coord, Coord),
     {
         self.for_each_selection_mut(|sel, text| {
             let (_new_anchor, new_cursor) = f(sel.cursor, text);
@@ -427,7 +427,7 @@ impl Buffer {
     }
     fn change_selection<F>(&mut self, f: F)
     where
-        F: Fn(CoordUnaligned, CoordUnaligned, &Rope) -> (CoordUnaligned, CoordUnaligned),
+        F: Fn(Coord, Coord, &Rope) -> (Coord, Coord),
     {
         self.for_each_selection_mut(|sel, text| {
             let (new_cursor, new_anchor) = f(sel.cursor, sel.anchor, text);
@@ -437,27 +437,27 @@ impl Buffer {
     }
 
     fn move_cursor_backward(&mut self) {
-        self.move_cursor(CoordUnaligned::backward);
+        self.move_cursor(Coord::backward);
     }
 
     fn move_cursor_forward(&mut self) {
-        self.move_cursor(CoordUnaligned::forward);
+        self.move_cursor(Coord::forward);
     }
 
     fn move_cursor_down(&mut self) {
-        self.move_cursor(CoordUnaligned::down_unaligned);
+        self.move_cursor(Coord::down_unaligned);
     }
 
     fn move_cursor_up(&mut self) {
-        self.move_cursor(CoordUnaligned::up_unaligned);
+        self.move_cursor(Coord::up_unaligned);
     }
 
     fn move_cursor_forward_word(&mut self) {
-        self.move_cursor_2(CoordUnaligned::forward_word)
+        self.move_cursor_2(Coord::forward_word)
     }
 
     fn move_cursor_backward_word(&mut self) {
-        self.move_cursor_2(CoordUnaligned::backward_word)
+        self.move_cursor_2(Coord::backward_word)
     }
 
     fn cursor_pos(&self) -> Coord {
@@ -635,7 +635,7 @@ impl Breeze {
         );
         let end_line = start_line + window_height;
 
-        let mut ch_idx = CoordUnaligned {
+        let mut ch_idx = Coord {
             line: start_line,
             column: 0,
         }

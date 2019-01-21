@@ -3,36 +3,26 @@ use ropey::Rope;
 use crate::idx::*;
 use std::cmp::min;
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
-/// Coordinate where the column can exceed the line length
-pub struct CoordUnaligned {
+#[derive(Copy, Clone, Debug, Default, PartialOrd, PartialEq, Eq, Ord)]
+pub struct Coord {
     pub line: usize,
     pub column: usize,
 }
 
-impl From<Coord> for CoordUnaligned {
-    fn from(coord: Coord) -> Self {
-        Self {
-            line: coord.line,
-            column: coord.column,
-        }
-    }
-}
-
-impl CoordUnaligned {
-    fn map_as_coord<F>(self, text: &Rope, f: F) -> Self
+impl Coord {
+    pub fn map_as_idx<F>(self, text: &Rope, f: F) -> Self
     where
-        F: FnOnce(Coord, &Rope) -> Coord,
+        F: FnOnce(Idx) -> Idx,
     {
-        f(self.trim_column_to_buf(text), text).into()
+        Self::from_idx(f(self.to_idx(text)), text)
     }
 
-    fn map_as_coord_2<F>(self, text: &Rope, f: F) -> (Self, Self)
+    pub fn map_as_idx_2<F>(self, text: &Rope, f: F) -> (Self, Self)
     where
-        F: FnOnce(Coord, &Rope) -> (Coord, Coord),
+        F: FnOnce(Idx) -> (Idx, Idx),
     {
-        let (a, b) = f(self.trim_column_to_buf(text), text);
-        (a.into(), b.into())
+        let (a, b) = f(self.to_idx(text));
+        (Self::from_idx(a, text), Self::from_idx(b, text))
     }
 
     pub fn set_line(mut self, line: usize, text: &Rope) -> Self {
@@ -42,47 +32,12 @@ impl CoordUnaligned {
 
     pub fn set_column(mut self, column: usize, text: &Rope) -> Self {
         self.column = column;
-        self.trim_column_to_buf(text).into()
+        self.trim_column_to_buf(text)
     }
 
     pub fn to_idx(self, text: &Rope) -> Idx {
-        self.trim_column_to_buf(text).to_idx(text)
-    }
-
-    pub fn forward(self, text: &Rope) -> Self {
-        self.map_as_coord(text, Coord::forward)
-    }
-
-    pub fn forward_n(self, n: usize, text: &Rope) -> Self {
-        self.map_as_coord(text, |coord, text| coord.forward_n(n, text))
-    }
-
-    pub fn forward_to_line_end(self, text: &Rope) -> Self {
-        self.map_as_coord(text, |coord, text| coord.forward_to_line_end(text))
-    }
-
-    pub fn forward_past_line_end(self, text: &Rope) -> Self {
-        self.map_as_coord(text, |coord, text| coord.forward_past_line_end(text))
-    }
-
-    pub fn backward(self, text: &Rope) -> Self {
-        self.map_as_coord(text, Coord::backward)
-    }
-
-    pub fn backward_n(self, n: usize, text: &Rope) -> Self {
-        self.map_as_coord(text, |coord, text| coord.backward_n(n, text))
-    }
-
-    pub fn backward_word(self, text: &Rope) -> (Self, Self) {
-        self.map_as_coord_2(text, Coord::backward_word)
-    }
-
-    pub fn backward_to_line_start(self, text: &Rope) -> Self {
-        self.map_as_coord(text, |coord, text| coord.backward_to_line_start(text))
-    }
-
-    pub fn forward_word(self, text: &Rope) -> (Self, Self) {
-        self.map_as_coord_2(text, Coord::forward_word)
+        let trimed = self.trim_column_to_buf(text);
+        (text.line_to_char(trimed.line) + trimed.column).into()
     }
 
     pub fn up_unaligned(self, _text: &Rope) -> Self {
@@ -130,37 +85,6 @@ impl CoordUnaligned {
             column: self.column,
             line: min(self.line, text.len_lines().saturating_sub(1)),
         }
-    }
-}
-
-#[derive(Copy, Clone, Debug, Default)]
-/// Coordinate where the row is known to be within the line length
-///
-/// Note: This is within the buffer this `Coord` was created to work
-/// in.
-pub struct Coord {
-    pub line: usize,
-    pub column: usize,
-}
-
-impl Coord {
-    pub fn map_as_idx<F>(self, text: &Rope, f: F) -> Self
-    where
-        F: FnOnce(Idx) -> Idx,
-    {
-        Self::from_idx(f(self.to_idx(text)), text)
-    }
-
-    pub fn map_as_idx_2<F>(self, text: &Rope, f: F) -> (Self, Self)
-    where
-        F: FnOnce(Idx) -> (Idx, Idx),
-    {
-        let (a, b) = f(self.to_idx(text));
-        (Self::from_idx(a, text), Self::from_idx(b, text))
-    }
-
-    pub fn to_idx(self, text: &Rope) -> Idx {
-        (text.line_to_char(self.line) + self.column).into()
     }
 
     pub fn from_idx(idx: Idx, text: &Rope) -> Self {

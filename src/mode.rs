@@ -170,28 +170,28 @@ impl Normal {
                 state.mode = crate::Mode::Insert;
             }
             Key::Char('h') => {
-                state.buffer.move_cursor(CoordUnaligned::backward);
+                state.buffer.move_cursor(Coord::backward);
             }
             Key::Char('H') => {
-                state.buffer.extend_cursor(CoordUnaligned::backward);
+                state.buffer.extend_cursor(Coord::backward);
             }
             Key::Char('l') => {
-                state.buffer.move_cursor(CoordUnaligned::forward);
+                state.buffer.move_cursor(Coord::forward);
             }
             Key::Char('L') => {
-                state.buffer.extend_cursor(CoordUnaligned::forward);
+                state.buffer.extend_cursor(Coord::forward);
             }
             Key::Char('j') => {
-                state.buffer.move_cursor(CoordUnaligned::down_unaligned);
+                state.buffer.move_cursor(Coord::down_unaligned);
             }
             Key::Char('J') => {
-                state.buffer.extend_cursor(CoordUnaligned::down_unaligned);
+                state.buffer.extend_cursor(Coord::down_unaligned);
             }
             Key::Char('k') => {
-                state.buffer.move_cursor(CoordUnaligned::up_unaligned);
+                state.buffer.move_cursor(Coord::up_unaligned);
             }
             Key::Char('K') => {
-                state.buffer.extend_cursor(CoordUnaligned::up_unaligned);
+                state.buffer.extend_cursor(Coord::up_unaligned);
             }
             Key::Char('d') => {
                 state.yanked = state.buffer.delete();
@@ -210,16 +210,16 @@ impl Normal {
                 state.buffer.paste_extend(&state.yanked);
             }
             Key::Char('w') => {
-                state.buffer.move_cursor_2(CoordUnaligned::forward_word);
+                state.buffer.move_cursor_2(Coord::forward_word);
             }
             Key::Char('W') => {
-                state.buffer.extend_cursor_2(CoordUnaligned::forward_word);
+                state.buffer.extend_cursor_2(Coord::forward_word);
             }
             Key::Char('b') => {
-                state.buffer.move_cursor_2(CoordUnaligned::backward_word);
+                state.buffer.move_cursor_2(Coord::backward_word);
             }
             Key::Char('B') => {
-                state.buffer.extend_cursor_2(CoordUnaligned::backward_word);
+                state.buffer.extend_cursor_2(Coord::backward_word);
             }
             Key::Char('x') => {
                 state.buffer.move_line();

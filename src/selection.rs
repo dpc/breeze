@@ -1,13 +1,13 @@
 use crate::{coord::*, idx::*};
 use ropey::Rope;
 
-/// Selection with `CoordUnaligned`
+/// Selection with `Coord`
 ///
 /// An ordererd pair of indices in the buffer
 #[derive(Default, Debug, Clone, Copy)]
 pub struct SelectionUnaligned {
-    pub anchor: CoordUnaligned,
-    pub cursor: CoordUnaligned,
+    pub anchor: Coord,
+    pub cursor: Coord,
 }
 
 impl SelectionUnaligned {
