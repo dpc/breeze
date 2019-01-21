@@ -13,15 +13,15 @@ pub struct SelectionUnaligned {
 impl SelectionUnaligned {
     pub fn align(self, text: &Rope) -> Selection {
         Selection {
-            anchor: self.anchor.align(text).to_idx(text),
-            cursor: self.cursor.align(text).to_idx(text),
+            anchor: self.anchor.trim_column_to_buf(text).to_idx(text),
+            cursor: self.cursor.trim_column_to_buf(text).to_idx(text),
         }
     }
 
     pub fn trim(self, text: &Rope) -> Self {
         Self {
-            anchor: self.anchor.trim(text),
-            cursor: self.cursor.trim(text),
+            anchor: self.anchor.trim_line_to_buf(text),
+            cursor: self.cursor.trim_line_to_buf(text),
         }
     }
 

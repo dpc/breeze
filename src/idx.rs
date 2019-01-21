@@ -152,24 +152,28 @@ impl Idx {
     }
 }
 
+// Note: does not check bounds
 impl std::ops::AddAssign<usize> for Idx {
     fn add_assign(&mut self, rhs: usize) {
         self.0 += rhs;
     }
 }
 
+// Note: does not check bounds
 impl std::ops::SubAssign<usize> for Idx {
     fn sub_assign(&mut self, rhs: usize) {
         self.0 -= rhs;
     }
 }
 
+// Note: does not check bounds
 impl From<usize> for Idx {
     fn from(u: usize) -> Self {
         Idx(u)
     }
 }
 
+// Note: does not check bounds
 impl From<Idx> for usize {
     fn from(idx: Idx) -> Self {
         idx.0

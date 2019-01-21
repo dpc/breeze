@@ -24,19 +24,29 @@ impl CoordUnaligned {
     where
         F: FnOnce(Coord, &Rope) -> Coord,
     {
-        f(self.align(text), text).into()
+        f(self.trim_column_to_buf(text), text).into()
     }
 
     fn map_as_coord_2<F>(self, text: &Rope, f: F) -> (Self, Self)
     where
         F: FnOnce(Coord, &Rope) -> (Coord, Coord),
     {
-        let (a, b) = f(self.align(text), text);
+        let (a, b) = f(self.trim_column_to_buf(text), text);
         (a.into(), b.into())
     }
 
+    pub fn set_line(mut self, line: usize, text: &Rope) -> Self {
+        self.line = line;
+        self.trim_line_to_buf(text)
+    }
+
+    pub fn set_column(mut self, column: usize, text: &Rope) -> Self {
+        self.column = column;
+        self.trim_column_to_buf(text).into()
+    }
+
     pub fn to_idx(self, text: &Rope) -> Idx {
-        self.align(text).to_idx(text)
+        self.trim_column_to_buf(text).to_idx(text)
     }
 
     pub fn forward(self, text: &Rope) -> Self {
@@ -93,14 +103,12 @@ impl CoordUnaligned {
             column: self.column,
         }
     }
-}
 
-impl CoordUnaligned {
     /// Align to buffer
     ///
     /// Column in the `Coord` can actually exeed the actual column,
     /// which is useful eg. for consecutive up and down movements
-    pub fn align(self, text: &Rope) -> Coord {
+    pub fn trim_column_to_buf(self, text: &Rope) -> Coord {
         let line = text.line(self.line);
         let line_len = line.len_chars();
         let trimed_column = if line_len == 0 {
@@ -117,7 +125,7 @@ impl CoordUnaligned {
         }
     }
 
-    pub fn trim(self, text: &Rope) -> Self {
+    pub fn trim_line_to_buf(self, text: &Rope) -> Self {
         Self {
             column: self.column,
             line: min(self.line, text.len_lines().saturating_sub(1)),

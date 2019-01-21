@@ -177,8 +177,9 @@ impl Buffer {
     }
 
     fn insert(&mut self, ch: char) {
-        let mut insertion_points = self
-            .for_each_enumerated_selection(|i, sel, text| (i, sel.cursor.align(text).to_idx(text)));
+        let mut insertion_points = self.for_each_enumerated_selection(|i, sel, text| {
+            (i, sel.cursor.trim_column_to_buf(text).to_idx(text))
+        });
         insertion_points.sort_by_key(|&(_, idx)| idx);
         insertion_points.reverse();
 
@@ -222,8 +223,9 @@ impl Buffer {
     }
 
     fn paste(&mut self, yanked: &[Rope]) {
-        let mut insertion_points = self
-            .for_each_enumerated_selection(|i, sel, text| (i, sel.cursor.align(text).to_idx(text)));
+        let mut insertion_points = self.for_each_enumerated_selection(|i, sel, text| {
+            (i, sel.cursor.trim_column_to_buf(text).to_idx(text))
+        });
         insertion_points.sort_by_key(|&(_, idx)| idx);
         insertion_points.reverse();
 
@@ -247,11 +249,21 @@ impl Buffer {
                 }
                 for fixing_i in 0..i {
                     let fixing_sel = &mut self.selections[insertion_points[fixing_i].0];
-                    if *idx <= fixing_sel.cursor.align(&self.text).to_idx(&self.text) {
+                    if *idx
+                        <= fixing_sel
+                            .cursor
+                            .trim_column_to_buf(&self.text)
+                            .to_idx(&self.text)
+                    {
                         fixing_sel.cursor =
                             fixing_sel.cursor.forward_n(to_yank.len_chars(), &self.text);
                     }
-                    if *idx <= fixing_sel.anchor.align(&self.text).to_idx(&self.text) {
+                    if *idx
+                        <= fixing_sel
+                            .anchor
+                            .trim_column_to_buf(&self.text)
+                            .to_idx(&self.text)
+                    {
                         fixing_sel.anchor =
                             fixing_sel.anchor.forward_n(to_yank.len_chars(), &self.text);
                     }
@@ -261,8 +273,9 @@ impl Buffer {
     }
 
     fn paste_extend(&mut self, yanked: &[Rope]) {
-        let mut insertion_points = self
-            .for_each_enumerated_selection(|i, sel, text| (i, sel.cursor.align(text).to_idx(text)));
+        let mut insertion_points = self.for_each_enumerated_selection(|i, sel, text| {
+            (i, sel.cursor.trim_column_to_buf(text).to_idx(text))
+        });
         insertion_points.sort_by_key(|&(_, idx)| idx);
         insertion_points.reverse();
 
@@ -285,11 +298,21 @@ impl Buffer {
                 }
                 for fixing_i in 0..i {
                     let fixing_sel = &mut self.selections[insertion_points[fixing_i].0];
-                    if *idx <= fixing_sel.cursor.align(&self.text).to_idx(&self.text) {
+                    if *idx
+                        <= fixing_sel
+                            .cursor
+                            .trim_column_to_buf(&self.text)
+                            .to_idx(&self.text)
+                    {
                         fixing_sel.cursor =
                             fixing_sel.cursor.forward_n(to_yank.len_chars(), &self.text);
                     }
-                    if *idx <= fixing_sel.anchor.align(&self.text).to_idx(&self.text) {
+                    if *idx
+                        <= fixing_sel
+                            .anchor
+                            .trim_column_to_buf(&self.text)
+                            .to_idx(&self.text)
+                    {
                         fixing_sel.anchor =
                             fixing_sel.anchor.forward_n(to_yank.len_chars(), &self.text);
                     }
@@ -438,7 +461,7 @@ impl Buffer {
     }
 
     fn cursor_pos(&self) -> Coord {
-        self.selections[0].cursor.align(&self.text)
+        self.selections[0].cursor.trim_column_to_buf(&self.text)
     }
 
     fn move_line(&mut self) {
@@ -662,9 +685,10 @@ impl Breeze {
         buf.reset_color().unwrap();
         write!(
             &mut buf,
-            "{}{}",
+            "{}{} {}",
             termion::cursor::Goto(1, self.display_rows as u16),
             self.state.mode.name(),
+            self.state.mode.num_prefix_str(),
         )
         .unwrap();
 
