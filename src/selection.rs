@@ -33,7 +33,7 @@ impl SelectionUnaligned {
         }
     }
 
-    pub fn trim(self, text: &Rope) -> Self {
+    pub fn line_trimed(self, text: &Rope) -> Self {
         Self {
             anchor: self.anchor.trim_line_to_buf(text),
             cursor: self.cursor.trim_line_to_buf(text),
