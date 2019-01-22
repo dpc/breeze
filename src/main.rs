@@ -25,6 +25,13 @@ mod selection;
 
 use crate::{coord::*, idx::Idx, mode::*, selection::*};
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum VisualSelection {
+    DirectionMarker,
+    Selection,
+    None,
+}
+
 /// Keep track of color codes in output
 ///
 /// This is to save on unnecessary output to terminal
@@ -127,7 +134,14 @@ impl Buffer {
             ..
         } = *self;
 
-        selections.iter_mut().map(|sel| f(sel, text)).collect()
+        selections
+            .iter_mut()
+            .map(|sel| {
+                let res = f(sel, text);
+                *sel = sel.update_last_direction();
+                res
+            })
+            .collect()
     }
 
     fn for_each_enumerated_selection<F, R>(&self, mut f: F) -> Vec<R>
@@ -163,10 +177,22 @@ impl Buffer {
             .collect()
     }
 
-    fn is_idx_selected(&self, idx: Idx) -> bool {
-        self.selections
+    fn idx_selection_type(&self, idx: Idx) -> VisualSelection {
+        if self
+            .selections
             .iter()
-            .any(|sel| sel.align(&self.text).is_idx_inside(idx))
+            .any(|sel| sel.align(&self.text).is_idx_strictly_inside(idx))
+        {
+            VisualSelection::Selection
+        } else if self
+            .selections
+            .iter()
+            .any(|sel| sel.align(&self.text).is_idx_inside_direction_marker(idx))
+        {
+            VisualSelection::DirectionMarker
+        } else {
+            VisualSelection::None
+        }
     }
 
     fn reverse_selections(&mut self) {
@@ -235,7 +261,7 @@ impl Buffer {
                 }
                 {
                     let fixing_sel = &mut self.selections[insertion_points[i].0];
-                    if fixing_sel.align(&self.text).is_forward().unwrap_or(true) {
+                    if fixing_sel.align(&self.text).is_forward() {
                         fixing_sel.anchor = fixing_sel.cursor;
                         fixing_sel.cursor =
                             fixing_sel.cursor.forward(to_yank.len_chars(), &self.text);
@@ -285,7 +311,7 @@ impl Buffer {
                 }
                 {
                     let fixing_sel = &mut self.selections[insertion_points[i].0];
-                    if fixing_sel.align(&self.text).is_forward().unwrap_or(true) {
+                    if fixing_sel.align(&self.text).is_forward() {
                         fixing_sel.cursor =
                             fixing_sel.cursor.forward(to_yank.len_chars(), &self.text);
                     } else {
@@ -353,14 +379,10 @@ impl Buffer {
             let anchor_idx = sel.cursor.to_idx(text);
 
             if idx <= cursor_idx {
-                sel.cursor = Idx(cursor_idx.0.saturating_add(offset))
-                    .to_coord(text)
-                    .into();
+                sel.cursor = Idx(cursor_idx.0.saturating_add(offset)).to_coord(text);
             }
             if idx <= anchor_idx {
-                sel.anchor = Idx(anchor_idx.0.saturating_add(offset))
-                    .to_coord(text)
-                    .into();
+                sel.anchor = Idx(anchor_idx.0.saturating_add(offset)).to_coord(text);
             }
         });
     }
@@ -370,14 +392,10 @@ impl Buffer {
             let cursor_idx = sel.cursor.to_idx(text);
             let anchor_idx = sel.anchor.to_idx(text);
             if idx < cursor_idx {
-                sel.cursor = Idx(cursor_idx.0.saturating_sub(offset))
-                    .to_coord(text)
-                    .into();
+                sel.cursor = Idx(cursor_idx.0.saturating_sub(offset)).to_coord(text);
             }
             if idx < anchor_idx {
-                sel.anchor = Idx(anchor_idx.0.saturating_sub(offset))
-                    .to_coord(text)
-                    .into();
+                sel.anchor = Idx(anchor_idx.0.saturating_sub(offset)).to_coord(text);
             }
         });
     }
@@ -422,6 +440,7 @@ impl Buffer {
             sel.cursor = new_cursor;
         });
     }
+
     fn change_selection<F>(&mut self, f: F)
     where
         F: Fn(Coord, Coord, &Rope) -> (Coord, Coord),
@@ -505,20 +524,29 @@ impl Buffer {
             if self.selections[self.primary_sel_i]
                 .align(&self.text)
                 .is_forward()
-                .unwrap_or(true)
             {
                 Selection {
                     anchor: Idx(0),
                     cursor: Idx(self.text.len_chars()),
+                    was_forward: true,
                 }
             } else {
                 Selection {
                     cursor: Idx(0),
                     anchor: Idx(self.text.len_chars()),
+                    was_forward: false,
                 }
             },
             &self.text,
         )];
+    }
+
+    fn collapse(&mut self) {
+        if self.selections.len() > 1 {
+            self.selections = vec![self.selections[self.primary_sel_i]];
+        } else {
+            self.selections[self.primary_sel_i] = self.selections[self.primary_sel_i].collapsed();
+        }
     }
 }
 
@@ -668,9 +696,9 @@ impl Breeze {
             )
             .unwrap();
             for (char_i, ch) in line.chars().enumerate().take(self.display_cols) {
-                let in_selection = self.state.buffer.is_idx_selected(Idx(ch_idx + char_i));
+                let visual_selection = self.state.buffer.idx_selection_type(Idx(ch_idx + char_i));
                 let ch = if ch == '\n' {
-                    if in_selection {
+                    if visual_selection != VisualSelection::None {
                         Some('·')
                     } else {
                         None
@@ -680,14 +708,20 @@ impl Breeze {
                 };
 
                 if let Some(ch) = ch {
-                    if in_selection {
-                        buf.change_color(color::AnsiValue(16), color::AnsiValue(4))
-                            .unwrap();
-                        write!(&mut buf, "{}", ch).unwrap();
-                    } else {
-                        buf.reset_color().unwrap();
-                        write!(&mut buf, "{}", ch).unwrap();
+                    match visual_selection {
+                        VisualSelection::DirectionMarker => {
+                            buf.change_color(color::AnsiValue(14), color::AnsiValue(10))
+                                .unwrap();
+                        }
+                        VisualSelection::Selection => {
+                            buf.change_color(color::AnsiValue(16), color::AnsiValue(4))
+                                .unwrap();
+                        }
+                        VisualSelection::None => {
+                            buf.reset_color().unwrap();
+                        }
                     }
+                    write!(&mut buf, "{}", ch).unwrap();
                 }
             }
             ch_idx += line.len_chars();

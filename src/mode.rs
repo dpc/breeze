@@ -165,6 +165,9 @@ impl Normal {
             Key::Esc => {
                 state.mode = Mode::default();
             }
+            Key::Char(' ') => {
+                state.buffer.collapse();
+            }
             Key::Char('q') => {
                 state.quit = true;
             }

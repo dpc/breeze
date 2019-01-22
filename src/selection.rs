@@ -8,13 +8,28 @@ use ropey::Rope;
 pub struct SelectionUnaligned {
     pub anchor: Coord,
     pub cursor: Coord,
+    pub was_forward: bool,
 }
 
 impl SelectionUnaligned {
+    pub fn update_last_direction(mut self) -> Self {
+        let anchor = self.anchor;
+        let cursor = self.cursor;
+
+        if anchor < cursor {
+            self.was_forward = true;
+        } else if cursor < anchor {
+            self.was_forward = false;
+        }
+
+        self
+    }
+
     pub fn align(self, text: &Rope) -> Selection {
         Selection {
             anchor: self.anchor.trim_column_to_buf(text).to_idx(text),
             cursor: self.cursor.trim_column_to_buf(text).to_idx(text),
+            was_forward: self.was_forward,
         }
     }
 
@@ -22,6 +37,7 @@ impl SelectionUnaligned {
         Self {
             anchor: self.anchor.trim_line_to_buf(text),
             cursor: self.cursor.trim_line_to_buf(text),
+            was_forward: self.was_forward,
         }
     }
 
@@ -30,6 +46,7 @@ impl SelectionUnaligned {
         Self {
             cursor: self.cursor,
             anchor: self.cursor,
+            was_forward: self.was_forward,
         }
     }
 
@@ -37,6 +54,7 @@ impl SelectionUnaligned {
         Self {
             anchor: self.cursor,
             cursor: self.anchor,
+            was_forward: !self.was_forward,
         }
     }
 
@@ -44,11 +62,12 @@ impl SelectionUnaligned {
         Self {
             cursor: sel.cursor.to_coord(text),
             anchor: sel.anchor.to_coord(text),
+            was_forward: sel.was_forward,
         }
     }
 }
 
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 /// Selection with coordinates aligned
 ///
 /// As coordinates are aligned, it's OK to keep
@@ -56,10 +75,11 @@ impl SelectionUnaligned {
 pub struct Selection {
     pub anchor: Idx,
     pub cursor: Idx,
+    pub was_forward: bool,
 }
 
 impl Selection {
-    pub fn is_idx_inside(self, idx: Idx) -> bool {
+    pub fn is_idx_strictly_inside(self, idx: Idx) -> bool {
         let anchor = self.anchor;
         let cursor = self.cursor;
 
@@ -72,16 +92,39 @@ impl Selection {
         }
     }
 
-    pub fn is_forward(self) -> Option<bool> {
+    pub fn is_idx_inside_direction_marker(self, idx: Idx) -> bool {
+        // eprintln!("was_forward: {}", self.was_forward);
+        if self.is_forward() {
+            self.cursor == idx.saturating_add(1)
+        } else {
+            self.cursor == idx
+        }
+    }
+
+    // pub fn update_last_direction(mut self) -> Self {
+    //     let anchor = self.anchor;
+    //     let cursor = self.cursor;
+
+    //     if anchor < cursor {
+    //         self.was_forward = true;
+    //     } else if cursor < anchor {
+    //         self.was_forward = false;
+    //     }
+    //     eprintln!("setting was_forward: {}", self.was_forward);
+
+    //     self
+    // }
+
+    pub fn is_forward(self) -> bool {
         let anchor = self.anchor;
         let cursor = self.cursor;
 
         if anchor < cursor {
-            Some(true)
+            true
         } else if cursor < anchor {
-            Some(false)
+            false
         } else {
-            None
+            self.was_forward
         }
     }
 
@@ -108,6 +151,7 @@ impl Selection {
         Self {
             cursor: self.cursor,
             anchor: self.cursor,
+            was_forward: self.was_forward,
         }
     }
 
@@ -115,6 +159,7 @@ impl Selection {
         Self {
             anchor: self.cursor,
             cursor: self.anchor,
+            was_forward: !self.was_forward,
         }
     }
 }

@@ -142,6 +142,14 @@ impl Idx {
         }
         cur
     }
+
+    pub fn saturating_add(self, n: usize) -> Self {
+        Idx(self.0.saturating_add(n))
+    }
+
+    pub fn saturating_sub(self, n: usize) -> Self {
+        Idx(self.0.saturating_sub(n))
+    }
 }
 
 // Note: does not check bounds
