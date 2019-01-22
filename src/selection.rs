@@ -25,6 +25,11 @@ impl SelectionUnaligned {
         self
     }
 
+    pub fn is_empty(self, text: &Rope) -> bool {
+        let aligned = self.aligned(text);
+        aligned.cursor == aligned.anchor
+    }
+
     pub fn aligned(self, text: &Rope) -> Selection {
         Selection {
             anchor: self.anchor.trim_column_to_buf(text).to_idx(text),

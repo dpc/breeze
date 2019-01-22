@@ -108,11 +108,9 @@ impl Buffer {
             .any(|sel| sel.aligned(&self.text).is_idx_strictly_inside(idx))
         {
             VisualSelection::Selection
-        } else if self
-            .selections
-            .iter()
-            .any(|sel| sel.aligned(&self.text).is_idx_inside_direction_marker(idx))
-        {
+        } else if self.selections.iter().any(|sel| {
+            sel.is_empty(&self.text) && sel.aligned(&self.text).is_idx_inside_direction_marker(idx)
+        }) {
             VisualSelection::DirectionMarker
         } else {
             VisualSelection::None
