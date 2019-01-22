@@ -260,6 +260,18 @@ impl Normal {
             Key::Char('\'') | Key::Alt(';') => {
                 state.buffer.reverse_selections();
             }
+            Key::Ctrl('d') => {
+                state.buffer.move_cursor_down(25);
+            }
+            Key::Ctrl('D') => {
+                state.buffer.extend_cursor_down(25);
+            }
+            Key::Ctrl('u') => {
+                state.buffer.move_cursor_up(25);
+            }
+            Key::Ctrl('U') => {
+                state.buffer.extend_cursor_up(25);
+            }
             _ => {}
         }
         state
