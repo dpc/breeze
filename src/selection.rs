@@ -25,7 +25,7 @@ impl SelectionUnaligned {
         self
     }
 
-    pub fn align(self, text: &Rope) -> Selection {
+    pub fn aligned(self, text: &Rope) -> Selection {
         Selection {
             anchor: self.anchor.trim_column_to_buf(text).to_idx(text),
             cursor: self.cursor.trim_column_to_buf(text).to_idx(text),
@@ -79,6 +79,12 @@ pub struct Selection {
 }
 
 impl Selection {
+    pub fn aligned(mut self, text: &Rope) -> Self {
+        self.anchor = self.anchor.aligned(text);
+        self.cursor = self.cursor.aligned(text);
+        self
+    }
+
     pub fn is_idx_strictly_inside(self, idx: Idx) -> bool {
         let anchor = self.anchor;
         let cursor = self.cursor;
@@ -93,27 +99,25 @@ impl Selection {
     }
 
     pub fn is_idx_inside_direction_marker(self, idx: Idx) -> bool {
-        // eprintln!("was_forward: {}", self.was_forward);
         if self.is_forward() {
-            self.cursor == idx.saturating_add(1)
-        } else {
             self.cursor == idx
+        } else {
+            self.cursor == idx.saturating_add(1)
         }
     }
 
-    // pub fn update_last_direction(mut self) -> Self {
-    //     let anchor = self.anchor;
-    //     let cursor = self.cursor;
-
-    //     if anchor < cursor {
-    //         self.was_forward = true;
-    //     } else if cursor < anchor {
-    //         self.was_forward = false;
-    //     }
-    //     eprintln!("setting was_forward: {}", self.was_forward);
-
-    //     self
-    // }
+    pub fn self_or_direction_marker(mut self, text: &Rope) -> Self {
+        if self.anchor == self.cursor {
+            if self.was_forward {
+                self.cursor = self.cursor.saturating_add(1);
+            } else {
+                self.cursor = self.cursor.saturating_sub(1);
+            }
+            self.aligned(text)
+        } else {
+            self
+        }
+    }
 
     pub fn is_forward(self) -> bool {
         let anchor = self.anchor;

@@ -181,13 +181,13 @@ impl Buffer {
         if self
             .selections
             .iter()
-            .any(|sel| sel.align(&self.text).is_idx_strictly_inside(idx))
+            .any(|sel| sel.aligned(&self.text).is_idx_strictly_inside(idx))
         {
             VisualSelection::Selection
         } else if self
             .selections
             .iter()
-            .any(|sel| sel.align(&self.text).is_idx_inside_direction_marker(idx))
+            .any(|sel| sel.aligned(&self.text).is_idx_inside_direction_marker(idx))
         {
             VisualSelection::DirectionMarker
         } else {
@@ -220,7 +220,10 @@ impl Buffer {
 
     fn delete(&mut self) -> Vec<Rope> {
         let res = self.for_each_enumerated_selection_mut(|i, sel, text| {
-            let range = sel.align(text).sorted_range_usize();
+            let range = sel
+                .aligned(text)
+                .self_or_direction_marker(text)
+                .sorted_range_usize();
             let yanked = text.slice(range.clone()).into();
             *sel = sel.collapsed();
             (yanked, i, range)
@@ -240,7 +243,7 @@ impl Buffer {
 
     fn yank(&mut self) -> Vec<Rope> {
         self.for_each_selection_mut(|sel, text| {
-            let range = sel.align(text).sorted_range_usize();
+            let range = sel.aligned(text).sorted_range_usize();
             text.slice(range).into()
         })
     }
@@ -261,7 +264,7 @@ impl Buffer {
                 }
                 {
                     let fixing_sel = &mut self.selections[insertion_points[i].0];
-                    if fixing_sel.align(&self.text).is_forward() {
+                    if fixing_sel.aligned(&self.text).is_forward() {
                         fixing_sel.anchor = fixing_sel.cursor;
                         fixing_sel.cursor =
                             fixing_sel.cursor.forward(to_yank.len_chars(), &self.text);
@@ -311,7 +314,7 @@ impl Buffer {
                 }
                 {
                     let fixing_sel = &mut self.selections[insertion_points[i].0];
-                    if fixing_sel.align(&self.text).is_forward() {
+                    if fixing_sel.aligned(&self.text).is_forward() {
                         fixing_sel.cursor =
                             fixing_sel.cursor.forward(to_yank.len_chars(), &self.text);
                     } else {
@@ -363,7 +366,7 @@ impl Buffer {
 
     fn backspace(&mut self) {
         let removal_points = self.for_each_enumerated_selection_mut(|i, sel, text| {
-            let sel_aligned = sel.align(text);
+            let sel_aligned = sel.aligned(text);
             let range = (sel_aligned.cursor.0 - 1)..sel_aligned.cursor.0;
             *sel = sel.collapsed();
 
@@ -522,7 +525,7 @@ impl Buffer {
     fn select_all(&mut self) {
         self.selections = vec![SelectionUnaligned::from_selection(
             if self.selections[self.primary_sel_i]
-                .align(&self.text)
+                .aligned(&self.text)
                 .is_forward()
             {
                 Selection {

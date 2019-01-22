@@ -150,6 +150,13 @@ impl Idx {
     pub fn saturating_sub(self, n: usize) -> Self {
         Idx(self.0.saturating_sub(n))
     }
+
+    pub fn aligned(mut self, text: &Rope) -> Self {
+        if self.0 > text.len_chars() {
+            self.0 = text.len_chars();
+        }
+        self
+    }
 }
 
 // Note: does not check bounds
