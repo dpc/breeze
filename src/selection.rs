@@ -4,7 +4,7 @@ use ropey::Rope;
 /// Selection with `Coord`
 ///
 /// An ordererd pair of indices in the buffer
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SelectionUnaligned {
     pub anchor: Coord,
     pub cursor: Coord,

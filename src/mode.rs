@@ -1,6 +1,7 @@
 use crate::coord::*;
 use crate::State;
 use default::default;
+use std::cmp;
 use termion::event::Key;
 
 #[derive(Clone, Debug, Default)]
@@ -47,17 +48,20 @@ impl Mode {
 
     pub fn handle(&self, state: State, key: Key) -> State {
         use self::Mode::*;
-        match self {
+        let state = match self {
             Normal(normal) => normal.handle(state, key),
             Insert => self.handle_insert(state, key),
             Goto => self.handle_goto(state, key),
-        }
+        };
+
+        state
     }
 
     fn handle_insert(&self, mut state: State, key: Key) -> State {
         match key {
             Key::Esc => {
                 state.mode = default();
+                state.maybe_commit_undo_point();
             }
             Key::Char('\n') => {
                 state.buffer.insert('\n');
@@ -160,6 +164,41 @@ impl Normal {
     }
 
     fn handle_not_digit(&self, mut state: State, key: Key) -> State {
+        let times = self.num_prefix.unwrap_or(1);
+
+        match key {
+            Key::Char('u') => {
+                if let Some(buffer_history_undo_i) = state.buffer_history_undo_i.as_mut() {
+                    let history_i = buffer_history_undo_i.saturating_sub(1);
+                    *buffer_history_undo_i = history_i;
+                    state.buffer = state.buffer_history[history_i].clone();
+                } else if !state.buffer_history.is_empty() {
+                    let history_i = (state.buffer_history.len() - 1).saturating_sub(1);
+                    state.buffer_history_undo_i = Some(history_i);
+                    state.buffer = state.buffer_history[history_i].clone();
+                }
+                state
+            }
+            Key::Char('U') => {
+                if let Some(buffer_history_undo_i) = state.buffer_history_undo_i.as_mut() {
+                    let history_i = cmp::min(
+                        buffer_history_undo_i.saturating_add(times),
+                        state.buffer_history.len() - 1,
+                    );
+                    *buffer_history_undo_i = history_i;
+                    state.buffer = state.buffer_history[history_i].clone();
+                }
+                state
+            }
+            other => {
+                let mut state = self.handle_not_digit_no_undo(state, other);
+                state.maybe_commit_undo_point();
+                state
+            }
+        }
+    }
+
+    fn handle_not_digit_no_undo(&self, mut state: State, key: Key) -> State {
         let times = self.num_prefix.unwrap_or(1);
         match key {
             Key::Esc => {

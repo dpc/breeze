@@ -12,7 +12,7 @@ pub enum VisualSelection {
 /// Buffer
 ///
 /// A file opened for edition + some state around
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Buffer {
     pub text: ropey::Rope,
     pub selections: Vec<SelectionUnaligned>,

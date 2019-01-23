@@ -85,7 +85,18 @@ pub struct State {
     quit: bool,
     mode: Mode,
     buffer: Buffer,
+    buffer_history: Vec<Buffer>,
+    buffer_history_undo_i: Option<usize>,
     yanked: Vec<Rope>,
+}
+
+impl State {
+    fn maybe_commit_undo_point(&mut self) {
+        if self.buffer_history.last() != Some(&self.buffer) {
+            self.buffer_history.push(self.buffer.clone());
+        }
+        self.buffer_history_undo_i = None;
+    }
 }
 
 impl Default for State {
@@ -94,6 +105,8 @@ impl Default for State {
             quit: false,
             mode: Mode::default(),
             buffer: default(),
+            buffer_history: vec![],
+            buffer_history_undo_i: None,
             yanked: vec![],
         }
     }
