@@ -228,7 +228,7 @@ impl Breeze {
                 let visual_selection = self.state.buffer.idx_selection_type(Idx(ch_idx + char_i));
                 let ch = if ch == '\n' {
                     if visual_selection != VisualSelection::None {
-                        Some('·')
+                        Some('↩') // alternatives: ⤶  🡿
                     } else {
                         None
                     }
