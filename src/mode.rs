@@ -61,7 +61,6 @@ impl Mode {
         match key {
             Key::Esc => {
                 state.mode = default();
-                state.maybe_commit_undo_point();
             }
             Key::Char('\n') => {
                 state.buffer.insert('\n');
@@ -173,7 +172,7 @@ impl Normal {
                     *buffer_history_undo_i = history_i;
                     state.buffer = state.buffer_history[history_i].clone();
                 } else if !state.buffer_history.is_empty() {
-                    let history_i = (state.buffer_history.len() - 1).saturating_sub(1);
+                    let history_i = state.buffer_history.len().saturating_sub(1);
                     state.buffer_history_undo_i = Some(history_i);
                     state.buffer = state.buffer_history[history_i].clone();
                 }
@@ -191,9 +190,9 @@ impl Normal {
                 state
             }
             other => {
-                let mut state = self.handle_not_digit_no_undo(state, other);
-                state.maybe_commit_undo_point();
-                state
+                let prev_buf = state.buffer.clone();
+                self.handle_not_digit_no_undo(state, other)
+                    .maybe_commit_undo_point(&prev_buf)
             }
         }
     }
@@ -234,6 +233,7 @@ impl Normal {
             }
             Key::Char('i') => {
                 state.mode = crate::Mode::Insert;
+                state = state.commit_undo_point()
             }
             Key::Char('h') => {
                 state.buffer.move_cursor_backward(times);

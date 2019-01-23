@@ -91,11 +91,20 @@ pub struct State {
 }
 
 impl State {
-    fn maybe_commit_undo_point(&mut self) {
+    fn maybe_commit_undo_point(mut self, prev_buf: &Buffer) -> Self {
+        if self.buffer_history.last().map(|b| &b.text) != Some(&self.buffer.text) {
+            self.buffer_history.push(prev_buf.clone());
+        }
+        self.buffer_history_undo_i = None;
+        self
+    }
+    
+    fn commit_undo_point(mut self) -> Self {
         if self.buffer_history.last() != Some(&self.buffer) {
             self.buffer_history.push(self.buffer.clone());
         }
         self.buffer_history_undo_i = None;
+        self
     }
 }
 
