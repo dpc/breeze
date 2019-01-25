@@ -8,7 +8,12 @@
   <br>
 </p>
 
+# This project uses [sr.ht](https://sr.ht)
 
+Github repo is just a mirror for discoverability.
+
+Primary git repo: https://git.sr.ht/~dpc/breeze
+Primarily issue tracker: https://todo.sr.ht/~dpc/breeze
 
 # `breeze` -  An experimental, kakoune-inspired CLI-centric text/code editor with |-shaped cursor (in Rust)
 
