@@ -17,6 +17,16 @@ Github repo is just a mirror for discoverability.
 
 # `breeze` -  An experimental, kakoune-inspired CLI-centric text/code editor with |-shaped cursor (in Rust)
 
+### Features & Goals
+
+* Modal & CLI-centric, but in a modern edition
+    * `|`-shaped cursor
+    * Kakoune-inspired editing experience
+* Core library should compile to WebAssembly, so it can run everwhere, especially in the browser
+* WebAssembly plugin support
+    * Plugin-centric
+    * Sandboxed, so they can't steal your Bitcoins!
+
 I have recently switched to [kakoune](http://kakoune.org/) after years (decades?)
 of using Vim. I think changing *action, movement* into *movement, action* is a
 brilliant idea. I enjoy simplicity of Kakoune and I am generally quite happy using it.
