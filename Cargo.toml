@@ -3,6 +3,7 @@ authors = ["Dawid Ciężarkiewicz <dpc@dpc.pw>"]
 edition = "2018"
 name = "brz"
 version = "0.1.0"
+license = "MPL-2.0/MIT/Apache-2.0"
 
 [dependencies]
 common_failures = "*"
