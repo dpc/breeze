@@ -190,7 +190,11 @@ impl Breeze {
 
         let start_line = min(
             self.prev_start_line,
-            self.state.buffer().text.len_lines() - window_height,
+            self.state
+                .buffer()
+                .text
+                .len_lines()
+                .saturating_sub(window_height),
         );
         let end_line = start_line + window_height;
 
