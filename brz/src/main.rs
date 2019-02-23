@@ -15,22 +15,22 @@ use ropey::Rope;
 
 mod opts;
 
-use brz::{buffer::*, coord::*, idx::Idx, prelude::*, State};
+use libbrz::{buffer::*, coord::*, idx::Idx, prelude::*, State};
 
-fn termion_to_brz_key(key: termion::event::Key) -> brz::Key {
+fn termion_to_brz_key(key: termion::event::Key) -> libbrz::Key {
     match key {
-        termion::event::Key::Backspace => brz::Key::Backspace,
-        termion::event::Key::Left => brz::Key::Left,
-        termion::event::Key::Up => brz::Key::Up,
-        termion::event::Key::Right => brz::Key::Right,
-        termion::event::Key::Down => brz::Key::Down,
-        termion::event::Key::Home => brz::Key::Home,
-        termion::event::Key::F(u) => brz::Key::F(u),
-        termion::event::Key::Char(c) => brz::Key::Char(c),
-        termion::event::Key::Alt(c) => brz::Key::Alt(c),
-        termion::event::Key::Ctrl(c) => brz::Key::Ctrl(c),
-        termion::event::Key::Null => brz::Key::Null,
-        termion::event::Key::Esc => brz::Key::Esc,
+        termion::event::Key::Backspace => libbrz::Key::Backspace,
+        termion::event::Key::Left => libbrz::Key::Left,
+        termion::event::Key::Up => libbrz::Key::Up,
+        termion::event::Key::Right => libbrz::Key::Right,
+        termion::event::Key::Down => libbrz::Key::Down,
+        termion::event::Key::Home => libbrz::Key::Home,
+        termion::event::Key::F(u) => libbrz::Key::F(u),
+        termion::event::Key::Char(c) => libbrz::Key::Char(c),
+        termion::event::Key::Alt(c) => libbrz::Key::Alt(c),
+        termion::event::Key::Ctrl(c) => libbrz::Key::Ctrl(c),
+        termion::event::Key::Null => libbrz::Key::Null,
+        termion::event::Key::Esc => libbrz::Key::Esc,
         _ => unimplemented!(),
     }
 }

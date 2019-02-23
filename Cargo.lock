@@ -57,6 +57,7 @@ dependencies = [
  "common_failures 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "default 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libbrz 0.1.0",
  "ropey 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "structopt 0.2.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "termion 1.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -125,6 +126,16 @@ version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "unicode-segmentation 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "libbrz"
+version = "0.1.0"
+dependencies = [
+ "common_failures 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "default 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ropey 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
