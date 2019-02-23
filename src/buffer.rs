@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::{coord::*, idx::*, prelude::*, selection::*};
 use ropey::Rope;
 use std::cmp::min;

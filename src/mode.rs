@@ -1,8 +1,8 @@
 use crate::coord::*;
+use crate::Key;
 use crate::State;
 use default::default;
 use std::cmp;
-use termion::event::Key;
 
 #[derive(Clone, Debug, Default)]
 pub struct Normal {
@@ -232,7 +232,7 @@ impl Normal {
                 state.buffer.move_cursor_down(times);
             }
             Key::Char('i') => {
-                state.mode = crate::Mode::Insert;
+                state.mode = Mode::Insert;
                 state = state.commit_undo_point()
             }
             Key::Char('h') => {

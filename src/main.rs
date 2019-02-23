@@ -1,9 +1,5 @@
 #![allow(dead_code)]
 
-mod prelude;
-
-use self::prelude::*;
-
 use std::path::Path;
 
 use std::cmp::min;
@@ -17,14 +13,27 @@ use termion::screen::*;
 
 use ropey::Rope;
 
-mod buffer;
-mod coord;
-mod idx;
-mod mode;
 mod opts;
-mod selection;
 
-use crate::{buffer::*, coord::*, idx::Idx, mode::*};
+use brz::{buffer::*, coord::*, idx::Idx, prelude::*, State};
+
+fn termion_to_brz_key(key: termion::event::Key) -> brz::Key {
+    match key {
+        termion::event::Key::Backspace => brz::Key::Backspace,
+        termion::event::Key::Left => brz::Key::Left,
+        termion::event::Key::Up => brz::Key::Up,
+        termion::event::Key::Right => brz::Key::Right,
+        termion::event::Key::Down => brz::Key::Down,
+        termion::event::Key::Home => brz::Key::Home,
+        termion::event::Key::F(u) => brz::Key::F(u),
+        termion::event::Key::Char(c) => brz::Key::Char(c),
+        termion::event::Key::Alt(c) => brz::Key::Alt(c),
+        termion::event::Key::Ctrl(c) => brz::Key::Ctrl(c),
+        termion::event::Key::Null => brz::Key::Null,
+        termion::event::Key::Esc => brz::Key::Esc,
+        _ => unimplemented!(),
+    }
+}
 
 /// Keep track of color codes in output
 ///
@@ -79,48 +88,6 @@ impl io::Write for CachingAnsciWriter {
     }
 }
 
-/// The editor state
-#[derive(Clone)]
-pub struct State {
-    quit: bool,
-    mode: Mode,
-    buffer: Buffer,
-    buffer_history: Vec<Buffer>,
-    buffer_history_undo_i: Option<usize>,
-    yanked: Vec<Rope>,
-}
-
-impl State {
-    fn maybe_commit_undo_point(mut self, prev_buf: &Buffer) -> Self {
-        if self.buffer_history.last().map(|b| &b.text) != Some(&self.buffer.text) {
-            self.buffer_history.push(prev_buf.clone());
-        }
-        self.buffer_history_undo_i = None;
-        self
-    }
-    
-    fn commit_undo_point(mut self) -> Self {
-        if self.buffer_history.last() != Some(&self.buffer) {
-            self.buffer_history.push(self.buffer.clone());
-        }
-        self.buffer_history_undo_i = None;
-        self
-    }
-}
-
-impl Default for State {
-    fn default() -> Self {
-        State {
-            quit: false,
-            mode: Mode::default(),
-            buffer: default(),
-            buffer_history: vec![],
-            buffer_history_undo_i: None,
-            yanked: vec![],
-        }
-    }
-}
-
 /// The editor instance
 ///
 /// Screen drawing + state handling
@@ -160,7 +127,8 @@ impl Breeze {
 
     fn open(&mut self, path: &Path) -> Result<()> {
         let text = Rope::from_reader(std::io::BufReader::new(std::fs::File::open(path)?))?;
-        self.state.buffer = Buffer::from_text(text);
+        self.state.open_buffer(Buffer::from_text(text));
+
         Ok(())
     }
 
@@ -171,7 +139,7 @@ impl Breeze {
         for e in stdin.events() {
             match e {
                 Ok(Event::Key(key)) => {
-                    self.state = self.state.mode.handle(self.state.clone(), key);
+                    self.state = self.state.clone().handle(termion_to_brz_key(key));
                 }
                 Ok(Event::Unsupported(_u)) => {
                     eprintln!("{:?}", _u);
@@ -183,7 +151,7 @@ impl Breeze {
                 Err(e) => panic!("{}", e),
             }
 
-            if self.state.quit {
+            if self.state.is_finished() {
                 return Ok(());
             }
             self.draw_buffer()?;
@@ -205,7 +173,7 @@ impl Breeze {
 
         write!(&mut buf, "{}", termion::clear::All).unwrap();
         let window_height = self.display_rows - 1;
-        let cursor_pos = self.state.buffer.cursor_pos();
+        let cursor_pos = self.state.buffer().cursor_pos();
         let max_start_line = cursor_pos.line.saturating_sub(self.window_margin);
         let min_start_line = cursor_pos
             .line
@@ -222,7 +190,7 @@ impl Breeze {
 
         let start_line = min(
             self.prev_start_line,
-            self.state.buffer.text.len_lines() - window_height,
+            self.state.buffer().text.len_lines() - window_height,
         );
         let end_line = start_line + window_height;
 
@@ -230,15 +198,15 @@ impl Breeze {
             line: start_line,
             column: 0,
         }
-        .to_idx(&self.state.buffer.text)
+        .to_idx(&self.state.buffer().text)
         .0;
 
         for (visual_line_i, line_i) in (start_line..end_line).enumerate() {
-            if line_i >= self.state.buffer.text.len_lines() {
+            if line_i >= self.state.buffer().text.len_lines() {
                 break;
             }
 
-            let line = self.state.buffer.text.line(line_i);
+            let line = self.state.buffer().text.line(line_i);
 
             write!(
                 &mut buf,
@@ -247,7 +215,7 @@ impl Breeze {
             )
             .unwrap();
             for (char_i, ch) in line.chars().enumerate().take(self.display_cols) {
-                let visual_selection = self.state.buffer.idx_selection_type(Idx(ch_idx + char_i));
+                let visual_selection = self.state.buffer().idx_selection_type(Idx(ch_idx + char_i));
                 let ch = if ch == '\n' {
                     if visual_selection != VisualSelection::None {
                         Some('↩') // alternatives: ⤶  🡿
@@ -284,8 +252,8 @@ impl Breeze {
             &mut buf,
             "{}{} {}",
             termion::cursor::Goto(1, self.display_rows as u16),
-            self.state.mode.name(),
-            self.state.mode.num_prefix_str(),
+            self.state.mode_name(),
+            self.state.mode_num_prefix_str(),
         )
         .unwrap();
 
