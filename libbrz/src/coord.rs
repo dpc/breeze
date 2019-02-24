@@ -115,4 +115,17 @@ impl Coord {
     pub fn backward_word(self, text: &Rope) -> (Self, Self) {
         self.map_as_idx_2(text, |idx| idx.backward_word(text))
     }
+
+    pub fn before_first_non_whitespace(self, text: &Rope) -> Self {
+        let line = text.line(self.line);
+        if let Some((i, _)) = line
+            .chars()
+            .enumerate()
+            .find(|(_i, ch)| !ch.is_whitespace())
+        {
+            self.set_column(i, text)
+        } else {
+            self.set_column(line.len_chars() - 1, text)
+        }
+    }
 }

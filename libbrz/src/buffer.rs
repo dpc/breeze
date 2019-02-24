@@ -49,7 +49,7 @@ impl Buffer {
         selections.iter().map(|sel| f(sel, text)).collect()
     }
 
-    fn for_each_selection_mut<F, R>(&mut self, mut f: F) -> Vec<R>
+    fn map_each_selection_mut<F, R>(&mut self, mut f: F) -> Vec<R>
     where
         F: FnMut(&mut SelectionUnaligned, &mut Rope) -> R,
     {
@@ -69,7 +69,7 @@ impl Buffer {
             .collect()
     }
 
-    fn for_each_enumerated_selection<F, R>(&self, mut f: F) -> Vec<R>
+    fn map_each_enumerated_selection<F, R>(&self, mut f: F) -> Vec<R>
     where
         F: FnMut(usize, &SelectionUnaligned, &Rope) -> R,
     {
@@ -85,7 +85,8 @@ impl Buffer {
             .map(|(i, sel)| f(i, sel, text))
             .collect()
     }
-    fn for_each_enumerated_selection_mut<F, R>(&mut self, mut f: F) -> Vec<R>
+
+    fn map_each_enumerated_selection_mut<F, R>(&mut self, mut f: F) -> Vec<R>
     where
         F: FnMut(usize, &mut SelectionUnaligned, &mut Rope) -> R,
     {
@@ -119,11 +120,11 @@ impl Buffer {
     }
 
     pub fn reverse_selections(&mut self) {
-        self.for_each_selection_mut(|sel, _text| *sel = sel.reversed());
+        self.map_each_selection_mut(|sel, _text| *sel = sel.reversed());
     }
 
     pub fn insert(&mut self, ch: char) {
-        let mut insertion_points = self.for_each_enumerated_selection(|i, sel, text| {
+        let mut insertion_points = self.map_each_enumerated_selection(|i, sel, text| {
             (i, sel.cursor.trim_column_to_buf(text).to_idx(text))
         });
         insertion_points.sort_by_key(|&(_, idx)| idx);
@@ -141,8 +142,40 @@ impl Buffer {
         }
     }
 
+    pub fn open(&mut self) {
+        let mut indents = self.map_each_enumerated_selection(|i, sel, text| {
+            let line_begining = sel.cursor.backward_to_line_start(text).to_idx(text).0;
+            let indent_end = sel.cursor.before_first_non_whitespace(text).to_idx(text).0;
+            let indent: Rope = text.slice(line_begining..indent_end).into();
+            let line_end = sel.cursor.forward_to_line_end(text);
+            (i, indent, line_end)
+        });
+        indents.sort_by_key(|&(_, _, line_end)| line_end);
+        indents.reverse();
+
+        // we insert from the back, fixing idx past the insertion every time
+        // this is O(n^2) while it could be O(n)
+        for (i, (_, indent, line_end)) in indents.iter().enumerate() {
+            self.text
+                .insert(line_end.to_idx(&self.text).0, &indent.to_string());
+            self.text.insert_char(line_end.to_idx(&self.text).0, '\n');
+            let sel = &mut self.selections[indents[i].0];
+            sel.cursor = *line_end;
+            for fixing_i in 0..=i {
+                let fixing_sel = &mut self.selections[indents[fixing_i].0];
+                fixing_sel.cursor = fixing_sel
+                    .cursor
+                    .forward(1 + indent.len_chars(), &self.text);
+                fixing_sel.anchor = fixing_sel
+                    .anchor
+                    .forward(1 + indent.len_chars(), &self.text);
+                *fixing_sel = fixing_sel.collapsed();
+            }
+        }
+    }
+
     pub fn delete(&mut self) -> Vec<Rope> {
-        let res = self.for_each_enumerated_selection_mut(|i, sel, text| {
+        let res = self.map_each_enumerated_selection_mut(|i, sel, text| {
             let range = sel
                 .aligned(text)
                 .self_or_direction_marker(text)
@@ -165,14 +198,14 @@ impl Buffer {
     }
 
     pub fn yank(&mut self) -> Vec<Rope> {
-        self.for_each_selection_mut(|sel, text| {
+        self.map_each_selection_mut(|sel, text| {
             let range = sel.aligned(text).sorted_range_usize();
             text.slice(range).into()
         })
     }
 
     pub fn paste(&mut self, yanked: &[Rope]) {
-        let mut insertion_points = self.for_each_enumerated_selection(|i, sel, text| {
+        let mut insertion_points = self.map_each_enumerated_selection(|i, sel, text| {
             (i, sel.cursor.trim_column_to_buf(text).to_idx(text))
         });
         insertion_points.sort_by_key(|&(_, idx)| idx);
@@ -222,7 +255,7 @@ impl Buffer {
     }
 
     pub fn paste_extend(&mut self, yanked: &[Rope]) {
-        let mut insertion_points = self.for_each_enumerated_selection(|i, sel, text| {
+        let mut insertion_points = self.map_each_enumerated_selection(|i, sel, text| {
             (i, sel.cursor.trim_column_to_buf(text).to_idx(text))
         });
         insertion_points.sort_by_key(|&(_, idx)| idx);
@@ -288,7 +321,7 @@ impl Buffer {
     }
 
     pub fn backspace(&mut self) {
-        let removal_points = self.for_each_enumerated_selection_mut(|i, sel, text| {
+        let removal_points = self.map_each_enumerated_selection_mut(|i, sel, text| {
             let sel_aligned = sel.aligned(text);
             let range = (sel_aligned.cursor.0 - 1)..sel_aligned.cursor.0;
             *sel = sel.collapsed();
@@ -300,7 +333,7 @@ impl Buffer {
     }
 
     fn add_to_every_selection_after(&mut self, idx: Idx, offset: usize) {
-        self.for_each_selection_mut(|sel, text| {
+        self.map_each_selection_mut(|sel, text| {
             let cursor_idx = sel.cursor.to_idx(text);
             let anchor_idx = sel.cursor.to_idx(text);
 
@@ -314,7 +347,7 @@ impl Buffer {
     }
 
     fn sub_to_every_selection_after(&mut self, idx: Idx, offset: usize) {
-        self.for_each_selection_mut(|sel, text| {
+        self.map_each_selection_mut(|sel, text| {
             let cursor_idx = sel.cursor.to_idx(text);
             let anchor_idx = sel.anchor.to_idx(text);
             if idx < cursor_idx {
@@ -330,7 +363,7 @@ impl Buffer {
     where
         F: Fn(Coord, &Rope) -> Coord,
     {
-        self.for_each_selection_mut(|sel, text| {
+        self.map_each_selection_mut(|sel, text| {
             let new_cursor = f(sel.cursor, text);
             sel.anchor = sel.cursor;
             sel.cursor = new_cursor;
@@ -341,7 +374,7 @@ impl Buffer {
     where
         F: Fn(Coord, &Rope) -> (Coord, Coord),
     {
-        self.for_each_selection_mut(|sel, text| {
+        self.map_each_selection_mut(|sel, text| {
             let (new_anchor, new_cursor) = f(sel.cursor, text);
             sel.anchor = new_anchor;
             sel.cursor = new_cursor;
@@ -352,7 +385,7 @@ impl Buffer {
     where
         F: Fn(Coord, &Rope) -> Coord,
     {
-        self.for_each_selection_mut(|sel, text| {
+        self.map_each_selection_mut(|sel, text| {
             sel.cursor = f(sel.cursor, text);
         });
     }
@@ -361,7 +394,7 @@ impl Buffer {
     where
         F: Fn(Coord, &Rope) -> (Coord, Coord),
     {
-        self.for_each_selection_mut(|sel, text| {
+        self.map_each_selection_mut(|sel, text| {
             let (_new_anchor, new_cursor) = f(sel.cursor, text);
             sel.cursor = new_cursor;
         });
@@ -371,7 +404,7 @@ impl Buffer {
     where
         F: Fn(Coord, Coord, &Rope) -> (Coord, Coord),
     {
-        self.for_each_selection_mut(|sel, text| {
+        self.map_each_selection_mut(|sel, text| {
             let (new_cursor, new_anchor) = f(sel.cursor, sel.anchor, text);
             sel.anchor = new_anchor;
             sel.cursor = new_cursor;

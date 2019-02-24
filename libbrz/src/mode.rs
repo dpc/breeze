@@ -63,7 +63,7 @@ impl Mode {
                 state.mode = default();
             }
             Key::Char('\n') => {
-                state.buffer.insert('\n');
+                state.buffer.open();
             }
             Key::Backspace => {
                 state.buffer.backspace();
@@ -119,18 +119,9 @@ impl Mode {
                 });
             }
             Key::Char('i') => {
-                state.buffer.move_cursor(|coord, text| {
-                    let line = text.line(coord.line);
-                    if let Some((i, _)) = line
-                        .chars()
-                        .enumerate()
-                        .find(|(_i, ch)| !ch.is_whitespace())
-                    {
-                        coord.set_column(i, text)
-                    } else {
-                        coord.set_column(line.len_chars() - 1, text)
-                    }
-                });
+                state
+                    .buffer
+                    .move_cursor(|coord, text| coord.before_first_non_whitespace(text));
             }
             _ => {}
         }
@@ -264,6 +255,10 @@ impl Normal {
             }
             Key::Char('c') => {
                 state.yanked = state.buffer.delete();
+                state.mode = self::Mode::Insert;
+            }
+            Key::Char('o') => {
+                state.buffer.open();
                 state.mode = self::Mode::Insert;
             }
             Key::Char('y') => {
