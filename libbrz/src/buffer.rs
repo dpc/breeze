@@ -2,6 +2,7 @@
 use crate::{coord::*, idx::*, prelude::*, selection::*};
 use ropey::Rope;
 use std::cmp::min;
+use std::collections::BTreeSet;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum VisualSelection {
@@ -22,25 +23,51 @@ fn distance_to_next_tabstop_test() {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SelectionSet {
+    pub primary: usize,
+    pub selections: Vec<SelectionUnaligned>,
+}
+
+impl Default for SelectionSet {
+    fn default() -> Self {
+        let sel = SelectionUnaligned::default();
+        Self {
+            selections: vec![sel],
+            primary: 0,
+        }
+    }
+}
+
+impl SelectionSet {
+    pub fn to_lines(&self) -> BTreeSet<usize> {
+        let mut lines = BTreeSet::new();
+        for s in &self.selections {
+            let (from, to) = s.sorted();
+            for line in from.line..=to.line {
+                lines.insert(line);
+            }
+        }
+        lines
+    }
+}
+
 /// Buffer
 ///
 /// A file opened for edition + some state around
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Buffer {
     pub text: ropey::Rope,
-    pub selections: Vec<SelectionUnaligned>,
-    pub primary_sel_i: usize,
+    pub selection: SelectionSet,
     pub tabstop: usize,
 }
 
 impl Default for Buffer {
     fn default() -> Self {
-        let sel = SelectionUnaligned::default();
         Self {
             text: Rope::default(),
-            selections: vec![sel],
-            primary_sel_i: 0,
             tabstop: 4,
+            selection: default(),
         }
     }
 }
@@ -55,12 +82,16 @@ impl Buffer {
         F: FnMut(&SelectionUnaligned, &Rope) -> R,
     {
         let Self {
-            ref selections,
+            ref selection,
             ref text,
             ..
         } = *self;
 
-        selections.iter().map(|sel| f(sel, text)).collect()
+        selection
+            .selections
+            .iter()
+            .map(|sel| f(sel, text))
+            .collect()
     }
 
     fn map_each_selection_mut<F, R>(&mut self, mut f: F) -> Vec<R>
@@ -68,12 +99,13 @@ impl Buffer {
         F: FnMut(&mut SelectionUnaligned, &mut Rope) -> R,
     {
         let Self {
-            ref mut selections,
+            ref mut selection,
             ref mut text,
             ..
         } = *self;
 
-        selections
+        selection
+            .selections
             .iter_mut()
             .map(|sel| {
                 let res = f(sel, text);
@@ -88,12 +120,13 @@ impl Buffer {
         F: FnMut(usize, &SelectionUnaligned, &Rope) -> R,
     {
         let Self {
-            ref selections,
+            ref selection,
             ref text,
             ..
         } = *self;
 
-        selections
+        selection
+            .selections
             .iter()
             .enumerate()
             .map(|(i, sel)| f(i, sel, text))
@@ -105,12 +138,13 @@ impl Buffer {
         F: FnMut(usize, &mut SelectionUnaligned, &mut Rope) -> R,
     {
         let Self {
-            ref mut selections,
+            ref mut selection,
             ref mut text,
             ..
         } = *self;
 
-        selections
+        selection
+            .selections
             .iter_mut()
             .enumerate()
             .map(|(i, sel)| f(i, sel, text))
@@ -119,12 +153,13 @@ impl Buffer {
 
     pub fn idx_selection_type(&self, idx: Idx) -> VisualSelection {
         if self
+            .selection
             .selections
             .iter()
             .any(|sel| sel.aligned(&self.text).is_idx_strictly_inside(idx))
         {
             VisualSelection::Selection
-        } else if self.selections.iter().any(|sel| {
+        } else if self.selection.selections.iter().any(|sel| {
             sel.is_empty(&self.text) && sel.aligned(&self.text).is_idx_inside_direction_marker(idx)
         }) {
             VisualSelection::DirectionMarker
@@ -153,7 +188,7 @@ impl Buffer {
         for (i, (_, idx)) in insertion_points.iter().enumerate() {
             self.text.insert(idx.0, s);
             for fixing_i in 0..=i {
-                let fixing_sel = &mut self.selections[insertion_points[fixing_i].0];
+                let fixing_sel = &mut self.selection.selections[insertion_points[fixing_i].0];
                 fixing_sel.cursor = fixing_sel.cursor.forward(s.len(), &self.text);
                 *fixing_sel = fixing_sel.collapsed();
             }
@@ -176,10 +211,10 @@ impl Buffer {
             self.text
                 .insert(line_end.to_idx(&self.text).0, &indent.to_string());
             self.text.insert_char(line_end.to_idx(&self.text).0, '\n');
-            let sel = &mut self.selections[indents[i].0];
+            let sel = &mut self.selection.selections[indents[i].0];
             sel.cursor = *line_end;
             for fixing_i in 0..=i {
-                let fixing_sel = &mut self.selections[indents[fixing_i].0];
+                let fixing_sel = &mut self.selection.selections[indents[fixing_i].0];
                 fixing_sel.cursor = fixing_sel
                     .cursor
                     .forward(1 + indent.len_chars(), &self.text);
@@ -236,7 +271,7 @@ impl Buffer {
                     self.text.insert(idx.0, chunk);
                 }
                 {
-                    let fixing_sel = &mut self.selections[insertion_points[i].0];
+                    let fixing_sel = &mut self.selection.selections[insertion_points[i].0];
                     if fixing_sel.aligned(&self.text).is_forward() {
                         fixing_sel.anchor = fixing_sel.cursor;
                         fixing_sel.cursor =
@@ -247,7 +282,7 @@ impl Buffer {
                     }
                 }
                 for fixing_i in 0..i {
-                    let fixing_sel = &mut self.selections[insertion_points[fixing_i].0];
+                    let fixing_sel = &mut self.selection.selections[insertion_points[fixing_i].0];
                     if *idx
                         <= fixing_sel
                             .cursor
@@ -286,7 +321,7 @@ impl Buffer {
                     self.text.insert(idx.0, chunk);
                 }
                 {
-                    let fixing_sel = &mut self.selections[insertion_points[i].0];
+                    let fixing_sel = &mut self.selection.selections[insertion_points[i].0];
                     if fixing_sel.aligned(&self.text).is_forward() {
                         fixing_sel.cursor =
                             fixing_sel.cursor.forward(to_yank.len_chars(), &self.text);
@@ -296,7 +331,7 @@ impl Buffer {
                     }
                 }
                 for fixing_i in 0..i {
-                    let fixing_sel = &mut self.selections[insertion_points[fixing_i].0];
+                    let fixing_sel = &mut self.selection.selections[insertion_points[fixing_i].0];
                     if *idx
                         <= fixing_sel
                             .cursor
@@ -469,7 +504,9 @@ impl Buffer {
     }
 
     pub fn cursor_pos(&self) -> Coord {
-        self.selections[0].cursor.trim_column_to_buf(&self.text)
+        self.selection.selections[0]
+            .cursor
+            .trim_column_to_buf(&self.text)
     }
 
     pub fn move_line(&mut self) {
@@ -497,8 +534,8 @@ impl Buffer {
     }
 
     pub fn select_all(&mut self) {
-        self.selections = vec![SelectionUnaligned::from_selection(
-            if self.selections[self.primary_sel_i]
+        self.selection.selections = vec![SelectionUnaligned::from_selection(
+            if self.selection.selections[self.selection.primary]
                 .aligned(&self.text)
                 .is_forward()
             {
@@ -519,10 +556,11 @@ impl Buffer {
     }
 
     pub fn collapse(&mut self) {
-        if self.selections.len() > 1 {
-            self.selections = vec![self.selections[self.primary_sel_i]];
+        if self.selection.selections.len() > 1 {
+            self.selection.selections = vec![self.selection.selections[self.selection.primary]];
         } else {
-            self.selections[self.primary_sel_i] = self.selections[self.primary_sel_i].collapsed();
+            self.selection.selections[self.selection.primary] =
+                self.selection.selections[self.selection.primary].collapsed();
         }
     }
 
@@ -540,5 +578,15 @@ impl Buffer {
             line: coord.line,
             column: v_col,
         }
+    }
+
+    pub fn increase_indent(&self, _times: usize) {
+        let _affected_lines = self.selection.to_lines();
+        unimplemented!();
+    }
+
+    pub fn decrease_indent(&self, _times: usize) {
+        let _affected_lines = self.selection.to_lines();
+        unimplemented!();
     }
 }

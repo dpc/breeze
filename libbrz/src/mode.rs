@@ -183,13 +183,13 @@ impl Normal {
             }
             other => {
                 let prev_buf = state.buffer.clone();
-                self.handle_not_digit_no_undo(state, other)
+                self.handle_not_digit_not_undo(state, other)
                     .maybe_commit_undo_point(&prev_buf)
             }
         }
     }
 
-    fn handle_not_digit_no_undo(&self, mut state: State, key: Key) -> State {
+    fn handle_not_digit_not_undo(&self, mut state: State, key: Key) -> State {
         let times = self.num_prefix.unwrap_or(1);
         match key {
             Key::Esc => {
@@ -306,6 +306,12 @@ impl Normal {
             }
             Key::Ctrl('U') => {
                 state.buffer.extend_cursor_up(25);
+            }
+            Key::Char('>') => {
+                state.buffer.increase_indent(times);
+            }
+            Key::Char('<') => {
+                state.buffer.decrease_indent(times);
             }
             _ => {}
         }

@@ -25,6 +25,18 @@ impl SelectionUnaligned {
         self
     }
 
+    pub fn sorted(self) -> (Coord, Coord) {
+        if self.anchor.line < self.cursor.line {
+            (self.anchor, self.cursor)
+        } else if self.cursor.line < self.anchor.line {
+            (self.cursor, self.anchor)
+        } else if self.cursor.column < self.anchor.column {
+            (self.cursor, self.anchor)
+        } else {
+            (self.anchor, self.cursor)
+        }
+    }
+
     pub fn is_empty(self, text: &Rope) -> bool {
         let aligned = self.aligned(text);
         aligned.cursor == aligned.anchor
