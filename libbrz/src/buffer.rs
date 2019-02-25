@@ -123,7 +123,11 @@ impl Buffer {
         self.map_each_selection_mut(|sel, _text| *sel = sel.reversed());
     }
 
-    pub fn insert(&mut self, ch: char) {
+    pub fn insert_char(&mut self, ch: char) {
+        self.insert(&(ch.to_string()));
+    }
+
+    pub fn insert(&mut self, s: &str) {
         let mut insertion_points = self.map_each_enumerated_selection(|i, sel, text| {
             (i, sel.cursor.trim_column_to_buf(text).to_idx(text))
         });
@@ -133,15 +137,14 @@ impl Buffer {
         // we insert from the back, fixing idx past the insertion every time
         // this is O(n^2) while it could be O(n)
         for (i, (_, idx)) in insertion_points.iter().enumerate() {
-            self.text.insert_char(idx.0, ch);
+            self.text.insert(idx.0, s);
             for fixing_i in 0..=i {
                 let fixing_sel = &mut self.selections[insertion_points[fixing_i].0];
-                fixing_sel.cursor = fixing_sel.cursor.forward(1, &self.text);
+                fixing_sel.cursor = fixing_sel.cursor.forward(s.len(), &self.text);
                 *fixing_sel = fixing_sel.collapsed();
             }
         }
     }
-
     pub fn open(&mut self) {
         let mut indents = self.map_each_enumerated_selection(|i, sel, text| {
             let line_begining = sel.cursor.backward_to_line_start(text).to_idx(text).0;

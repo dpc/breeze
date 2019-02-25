@@ -3,3 +3,7 @@ members = [
 	"libbrz",
 	"brz",
 ]
+
+[profile.dev]
+# stuff's too slow in `debug`
+opt-level = 1

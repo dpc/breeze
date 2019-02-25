@@ -65,6 +65,9 @@ impl Mode {
             Key::Char('\n') => {
                 state.buffer.open();
             }
+            Key::Char('\t') => {
+                state.buffer.insert("    ");
+            }
             Key::Backspace => {
                 state.buffer.backspace();
             }
@@ -82,7 +85,7 @@ impl Mode {
             }
             Key::Char(ch) => {
                 if !ch.is_control() {
-                    state.buffer.insert(ch);
+                    state.buffer.insert_char(ch);
                 }
             }
             _ => {}
