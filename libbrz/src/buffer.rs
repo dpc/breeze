@@ -10,6 +10,18 @@ pub enum VisualSelection {
     None,
 }
 
+pub fn distance_to_next_tabstop(visual_column: usize, tabstop: usize) -> usize {
+    let next_tabstop = (visual_column + tabstop) / tabstop * tabstop;
+    next_tabstop - visual_column
+}
+
+#[test]
+fn distance_to_next_tabstop_test() {
+    for (v_col, expected) in &[(0, 4), (1, 3), (2, 2), (3, 1), (4, 4)] {
+        assert_eq!(distance_to_next_tabstop(*v_col, 4), *expected);
+    }
+}
+
 /// Buffer
 ///
 /// A file opened for edition + some state around
@@ -18,6 +30,7 @@ pub struct Buffer {
     pub text: ropey::Rope,
     pub selections: Vec<SelectionUnaligned>,
     pub primary_sel_i: usize,
+    pub tabstop: usize,
 }
 
 impl Default for Buffer {
@@ -27,6 +40,7 @@ impl Default for Buffer {
             text: Rope::default(),
             selections: vec![sel],
             primary_sel_i: 0,
+            tabstop: 4,
         }
     }
 }
@@ -509,6 +523,22 @@ impl Buffer {
             self.selections = vec![self.selections[self.primary_sel_i]];
         } else {
             self.selections[self.primary_sel_i] = self.selections[self.primary_sel_i].collapsed();
+        }
+    }
+
+    pub fn to_visual(&self, coord: Coord) -> Coord {
+        let line = self.text.line(coord.line);
+        let v_col = line.slice(..coord.column).chars().fold(0, |v_col, ch| {
+            if ch == '\t' {
+                v_col + distance_to_next_tabstop(v_col, self.tabstop)
+            } else {
+                v_col + 1
+            }
+        });
+
+        Coord {
+            line: coord.line,
+            column: v_col,
         }
     }
 }

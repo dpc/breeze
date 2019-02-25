@@ -216,16 +216,21 @@ impl Breeze {
                 termion::cursor::Goto(1, visual_line_i as u16 + 1)
             )
             .unwrap();
+
+            let mut visual_column = 0;
+
             for (char_i, ch) in line.chars().enumerate().take(self.display_cols) {
                 let visual_selection = self.state.buffer().idx_selection_type(Idx(ch_idx + char_i));
-                let ch = if ch == '\n' {
-                    if visual_selection != VisualSelection::None {
-                        Some('↩') // alternatives: ⤶  🡿
-                    } else {
-                        None
+                let (ch, n) = match ch {
+                    '\n' => {
+                        if visual_selection != VisualSelection::None {
+                            (Some('↩'), 1) // alternatives: ⤶  🡿
+                        } else {
+                            (None, 0)
+                        }
                     }
-                } else {
-                    Some(ch)
+                    '\t' => (Some('.'), distance_to_next_tabstop(visual_column, 4)),
+                    ch => (Some(ch), 1),
                 };
 
                 if let Some(ch) = ch {
@@ -242,8 +247,11 @@ impl Breeze {
                             buf.reset_color().unwrap();
                         }
                     }
-                    write!(&mut buf, "{}", ch).unwrap();
+                    for _ in 0..n {
+                        write!(&mut buf, "{}", ch).unwrap();
+                    }
                 }
+                visual_column += n;
             }
             ch_idx += line.len_chars();
         }
@@ -259,13 +267,14 @@ impl Breeze {
         )
         .unwrap();
 
+        let cursor_visual = self.state.buffer().to_visual(cursor_pos);
         // cursor
         write!(
             &mut buf,
             "\x1b[6 q{}{}",
             termion::cursor::Goto(
-                cursor_pos.column as u16 + 1,
-                (cursor_pos.line - start_line) as u16 + 1
+                cursor_visual.column as u16 + 1,
+                (cursor_visual.line - start_line) as u16 + 1
             ),
             termion::cursor::Show,
         )

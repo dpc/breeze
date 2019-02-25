@@ -48,13 +48,11 @@ impl Mode {
 
     pub fn handle(&self, state: State, key: Key) -> State {
         use self::Mode::*;
-        let state = match self {
+        match self {
             Normal(normal) => normal.handle(state, key),
             Insert => self.handle_insert(state, key),
             Goto => self.handle_goto(state, key),
-        };
-
-        state
+        }
     }
 
     fn handle_insert(&self, mut state: State, key: Key) -> State {
@@ -66,7 +64,7 @@ impl Mode {
                 state.buffer.open();
             }
             Key::Char('\t') => {
-                state.buffer.insert("    ");
+                state.buffer.insert_char('\t');
             }
             Key::Backspace => {
                 state.buffer.backspace();
