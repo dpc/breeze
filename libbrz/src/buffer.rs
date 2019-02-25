@@ -50,6 +50,39 @@ impl SelectionSet {
         }
         lines
     }
+
+    pub fn fix_after_insert(&mut self, idx: Idx, len: usize, text: &Rope) {
+        for i in 0..self.selections.len() {
+            let sel = &mut self.selections[i];
+            let cursor_idx = sel.cursor.to_idx(text);
+            let anchor_idx = sel.cursor.to_idx(text);
+
+            if idx <= cursor_idx {
+                sel.cursor = Idx(cursor_idx.0.saturating_add(len)).to_coord(text);
+            }
+            if idx <= anchor_idx {
+                sel.anchor = Idx(anchor_idx.0.saturating_add(len)).to_coord(text);
+            }
+        }
+    }
+
+    pub fn fix_after_delete(&mut self, idx: Idx, len: usize, text: &Rope) {
+        for i in 0..self.selections.len() {
+            let sel = &mut self.selections[i];
+            let cursor_idx = sel.cursor.to_idx(text);
+            let anchor_idx = sel.anchor.to_idx(text);
+            if idx.forward(len, text) < cursor_idx {
+                sel.cursor = Idx(cursor_idx.0.saturating_sub(len)).to_coord(text);
+            } else if idx < cursor_idx {
+                sel.cursor = Idx(cursor_idx.0.saturating_sub(cursor_idx.0 - idx.0)).to_coord(text);
+            }
+            if idx.forward(len, text) < anchor_idx {
+                sel.anchor = Idx(anchor_idx.0.saturating_sub(len)).to_coord(text);
+            } else if idx < anchor_idx {
+                sel.anchor = Idx(anchor_idx.0.saturating_sub(anchor_idx.0 - idx.0)).to_coord(text);
+            }
+        }
+    }
 }
 
 /// Buffer
@@ -239,8 +272,8 @@ impl Buffer {
         let mut removal_points = vec![];
         let mut yanked = vec![];
 
-        for (y, i, r) in res.into_iter() {
-            removal_points.push((i, r));
+        for (y, _, r) in res.into_iter() {
+            removal_points.push(r);
             yanked.push(y);
         }
 
@@ -358,57 +391,29 @@ impl Buffer {
     /// Remove text at given ranges
     ///
     /// `removal_points` contains list of `(selection_index, range)`,
-    fn remove_ranges(&mut self, mut removal_points: Vec<(usize, std::ops::Range<usize>)>) {
-        removal_points.sort_by_key(|&(_, ref range)| range.start);
-        removal_points.reverse();
+    fn remove_ranges(&mut self, removal_points: Vec<std::ops::Range<usize>>) {
+        for range in &removal_points {
+            self.selection
+                .fix_after_delete(Idx(range.start), range.len(), &self.text);
+        }
 
-        // we remove from the back, fixing idx past the removal every time
-        // this is O(n^2) while it could be O(n)
-        for (_, (_, range)) in removal_points.iter().enumerate() {
-            self.sub_to_every_selection_after(Idx(range.start), range.len());
-            // remove has to be after fixes, otherwise to_idx conversion
-            // will use the new buffer content, which will give wrong results
+        // remove has to be after fixes, otherwise to_idx conversion
+        // will use the new buffer content, which will give wrong results
+        for range in &removal_points {
             self.text.remove(range.clone());
         }
     }
 
     pub fn backspace(&mut self) {
-        let removal_points = self.map_each_enumerated_selection_mut(|i, sel, text| {
+        let removal_points = self.map_each_enumerated_selection_mut(|_, sel, text| {
             let sel_aligned = sel.aligned(text);
             let range = (sel_aligned.cursor.0 - 1)..sel_aligned.cursor.0;
             *sel = sel.collapsed();
 
-            (i, range)
+            range
         });
 
         self.remove_ranges(removal_points);
-    }
-
-    fn add_to_every_selection_after(&mut self, idx: Idx, offset: usize) {
-        self.map_each_selection_mut(|sel, text| {
-            let cursor_idx = sel.cursor.to_idx(text);
-            let anchor_idx = sel.cursor.to_idx(text);
-
-            if idx <= cursor_idx {
-                sel.cursor = Idx(cursor_idx.0.saturating_add(offset)).to_coord(text);
-            }
-            if idx <= anchor_idx {
-                sel.anchor = Idx(anchor_idx.0.saturating_add(offset)).to_coord(text);
-            }
-        });
-    }
-
-    fn sub_to_every_selection_after(&mut self, idx: Idx, offset: usize) {
-        self.map_each_selection_mut(|sel, text| {
-            let cursor_idx = sel.cursor.to_idx(text);
-            let anchor_idx = sel.anchor.to_idx(text);
-            if idx < cursor_idx {
-                sel.cursor = Idx(cursor_idx.0.saturating_sub(offset)).to_coord(text);
-            }
-            if idx < anchor_idx {
-                sel.anchor = Idx(anchor_idx.0.saturating_sub(offset)).to_coord(text);
-            }
-        });
     }
 
     pub fn move_cursor<F>(&mut self, f: F)
