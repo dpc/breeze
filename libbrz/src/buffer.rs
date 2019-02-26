@@ -292,7 +292,7 @@ impl Buffer {
                 fixing_sel.anchor = fixing_sel
                     .anchor
                     .forward(1 + indent.len_chars(), &self.text);
-                *fixing_sel = fixing_sel.collapsed();
+                *fixing_sel = fixing_sel.collapsed().sorted();
             }
         }
     }
