@@ -58,7 +58,7 @@ impl SelectionSet {
         lines
     }
 
-    pub fn fix_before_insert(&mut self, idx: Idx, len: usize) {
+    pub fn fix_on_insert(&mut self, idx: Idx, len: usize) {
         for i in 0..self.selections.len() {
             let sel = &mut self.selections[i];
             let cursor_idx = sel.cursor;
@@ -81,7 +81,7 @@ impl SelectionSet {
         }
     }
 
-    pub fn fix_before_delete(&mut self, idx: Idx, len: usize) {
+    pub fn fix_on_delete(&mut self, idx: Idx, len: usize) {
         for i in 0..self.selections.len() {
             let sel = &mut self.selections[i];
             let cursor_idx = &mut sel.cursor;
@@ -260,7 +260,7 @@ impl Buffer {
         for idx in insertion_points {
             self.selection.collapse();
             self.selection.sort();
-            self.selection.fix_before_insert(idx, s.len());
+            self.selection.fix_on_insert(idx, s.len());
             self.text.insert(idx.0, s);
         }
     }
@@ -332,12 +332,7 @@ impl Buffer {
         for (i, idx) in insertion_points.iter().enumerate() {
             self.selection.collapse();
             if let Some(to_yank) = yanked.get(i) {
-                self.selection.fix_before_insert(*idx, to_yank.len_chars());
-            }
-        }
-
-        for (i, idx) in insertion_points.iter().enumerate() {
-            if let Some(to_yank) = yanked.get(i) {
+                self.selection.fix_on_insert(*idx, to_yank.len_chars());
                 for chunk in to_yank.chunks() {
                     self.text.insert(idx.0, chunk);
                 }
@@ -352,12 +347,7 @@ impl Buffer {
 
         for (i, idx) in insertion_points.iter().enumerate() {
             if let Some(to_yank) = yanked.get(i) {
-                self.selection.fix_before_insert(*idx, to_yank.len_chars());
-            }
-        }
-
-        for (i, idx) in insertion_points.iter().enumerate() {
-            if let Some(to_yank) = yanked.get(i) {
+                self.selection.fix_on_insert(*idx, to_yank.len_chars());
                 for chunk in to_yank.chunks() {
                     self.text.insert(idx.0, chunk);
                 }
@@ -372,14 +362,8 @@ impl Buffer {
         removal_points.sort_by(|a, b| a.start.cmp(&b.start));
         removal_points.reverse();
 
-        for range in &removal_points {
-            self.selection
-                .fix_before_delete(Idx(range.start), range.len());
-        }
-
-        // remove has to be after fixes, otherwise to_idx conversion
-        // will use the new buffer content, which will give wrong results
-        for range in &removal_points {
+        for range in removal_points {
+            self.selection.fix_on_delete(Idx(range.start), range.len());
             self.text.remove(range.clone());
         }
     }
