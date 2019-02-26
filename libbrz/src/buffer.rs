@@ -27,7 +27,7 @@ fn distance_to_next_tabstop_test() {
 pub struct SelectionSet {
     pub primary: usize,
     pub selections: Vec<Selection>,
-    /// If this is non-empty, it contains column position, recorded,
+    /// If this is non-empty, it contains column position, recorded
     /// to preserve a column during up/down moves between lines
     /// that might be shorter
     pub cursor_column: Vec<usize>,
@@ -61,36 +61,21 @@ impl SelectionSet {
     pub fn fix_before_insert(&mut self, idx: Idx, len: usize) {
         for i in 0..self.selections.len() {
             let sel = &mut self.selections[i];
-            let cursor_idx = &mut sel.cursor;
-            let anchor_idx = &mut sel.anchor;
-
-            if idx <= *cursor_idx {
-                *cursor_idx = Idx(cursor_idx.0.saturating_add(len));
-            }
-            if idx <= *anchor_idx {
-                *anchor_idx = Idx(anchor_idx.0.saturating_add(len));
-            }
-        }
-    }
-
-    pub fn fix_before_extend(&mut self, idx: Idx, len: usize) {
-        for i in 0..self.selections.len() {
-            let sel = &mut self.selections[i];
-            let cursor_idx = &mut sel.cursor;
-            let anchor_idx = &mut sel.anchor;
-            if *cursor_idx < *anchor_idx {
-                if idx < *cursor_idx {
-                    *cursor_idx = Idx(cursor_idx.0.saturating_add(len));
+            let cursor_idx = sel.cursor;
+            let anchor_idx = sel.anchor;
+            if sel.is_forward() {
+                if idx <= cursor_idx {
+                    sel.cursor = Idx(cursor_idx.0.saturating_add(len));
                 }
-                if idx <= *anchor_idx {
-                    *anchor_idx = Idx(anchor_idx.0.saturating_add(len));
+                if idx < anchor_idx {
+                    sel.anchor = Idx(anchor_idx.0.saturating_add(len));
                 }
             } else {
-                if idx <= *cursor_idx {
-                    *cursor_idx = Idx(cursor_idx.0.saturating_add(len));
+                if idx < cursor_idx {
+                    sel.cursor = Idx(cursor_idx.0.saturating_add(len));
                 }
-                if idx < *anchor_idx {
-                    *anchor_idx = Idx(anchor_idx.0.saturating_add(len));
+                if idx <= anchor_idx {
+                    sel.anchor = Idx(anchor_idx.0.saturating_add(len));
                 }
             }
         }
@@ -126,6 +111,13 @@ impl SelectionSet {
 
     pub fn clear_cursor_column(&mut self) {
         self.cursor_column.clear();
+    }
+
+    pub fn collapse(&mut self) {
+        for i in 0..self.selections.len() {
+            let sel = &mut self.selections[i];
+            *sel = sel.collapsed();
+        }
     }
 }
 
@@ -332,39 +324,21 @@ impl Buffer {
     }
 
     pub fn paste(&mut self, yanked: &[Rope]) {
-        let mut insertion_points =
-            self.map_each_enumerated_selection(|i, sel, _text| (i, sel.cursor));
-        insertion_points.sort_by_key(|&(_, idx)| idx);
+        let mut insertion_points = self.map_each_selection_mut(|sel, _text| (sel.cursor));
+        insertion_points.sort();
         insertion_points.reverse();
 
-        // we insert from the back, fixing idx past the insertion every time
-        // this is O(n^2) while it could be O(n)
-        for (i, (_, idx)) in insertion_points.iter().enumerate() {
+        for (i, idx) in insertion_points.iter().enumerate() {
+            self.selection.collapse();
+            if let Some(to_yank) = yanked.get(i) {
+                self.selection.fix_before_insert(*idx, to_yank.len_chars());
+            }
+        }
+
+        for (i, idx) in insertion_points.iter().enumerate() {
             if let Some(to_yank) = yanked.get(i) {
                 for chunk in to_yank.chunks() {
                     self.text.insert(idx.0, chunk);
-                }
-                {
-                    let fixing_sel = &mut self.selection.selections[insertion_points[i].0];
-                    if fixing_sel.aligned(&self.text).is_forward() {
-                        fixing_sel.anchor = fixing_sel.cursor;
-                        fixing_sel.cursor =
-                            fixing_sel.cursor.forward(to_yank.len_chars(), &self.text);
-                    } else {
-                        fixing_sel.anchor =
-                            fixing_sel.cursor.forward(to_yank.len_chars(), &self.text);
-                    }
-                }
-                for fixing_i in 0..i {
-                    let fixing_sel = &mut self.selection.selections[insertion_points[fixing_i].0];
-                    if *idx <= fixing_sel.cursor {
-                        fixing_sel.cursor =
-                            fixing_sel.cursor.forward(to_yank.len_chars(), &self.text);
-                    }
-                    if *idx <= fixing_sel.anchor {
-                        fixing_sel.anchor =
-                            fixing_sel.anchor.forward(to_yank.len_chars(), &self.text);
-                    }
                 }
             }
         }
@@ -377,7 +351,7 @@ impl Buffer {
 
         for (i, idx) in insertion_points.iter().enumerate() {
             if let Some(to_yank) = yanked.get(i) {
-                self.selection.fix_before_extend(*idx, to_yank.len_chars());
+                self.selection.fix_before_insert(*idx, to_yank.len_chars());
             }
         }
 
