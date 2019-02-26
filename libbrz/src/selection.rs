@@ -129,18 +129,18 @@ impl Selection {
 
     pub fn is_idx_inside_direction_marker(self, idx: Idx) -> bool {
         if self.is_forward() {
-            self.cursor == idx
-        } else {
             self.cursor == idx.saturating_add(1)
+        } else {
+            self.cursor == idx
         }
     }
 
     pub fn self_or_direction_marker(mut self, text: &Rope) -> Self {
         if self.anchor == self.cursor {
             if self.was_forward {
-                self.cursor = self.cursor.saturating_add(1);
-            } else {
                 self.cursor = self.cursor.saturating_sub(1);
+            } else {
+                self.cursor = self.cursor.saturating_add(1);
             }
             self.aligned(text)
         } else {
@@ -161,21 +161,28 @@ impl Selection {
         }
     }
 
-    pub fn sorted(self) -> (Idx, Idx) {
-        if self.anchor < self.cursor {
+    pub fn sorted(self) -> Self {
+        if self.is_forward() {
+            self
+        } else {
+            self.reversed()
+        }
+    }
+
+    pub fn sorted_pair(self) -> (Idx, Idx) {
+        if self.is_forward() {
             (self.anchor, self.cursor)
         } else {
             (self.cursor, self.anchor)
         }
     }
-
     pub fn sorted_range(self) -> std::ops::Range<Idx> {
-        let (a, b) = self.sorted();
+        let (a, b) = self.sorted_pair();
         a..b
     }
 
     pub fn sorted_range_usize(self) -> std::ops::Range<usize> {
-        let (a, b) = self.sorted();
+        let (a, b) = self.sorted_pair();
         a.into()..b.into()
     }
 

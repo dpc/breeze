@@ -48,7 +48,7 @@ impl SelectionSet {
     pub fn to_lines(&self, text: &Rope) -> BTreeSet<usize> {
         let mut lines = BTreeSet::new();
         for s in &self.selections {
-            let (from, to) = s.sorted();
+            let (from, to) = s.sorted_pair();
             let from = from.to_coord(text);
             let to = to.to_coord(text);
             for line in from.line..=to.line {
@@ -117,6 +117,13 @@ impl SelectionSet {
         for i in 0..self.selections.len() {
             let sel = &mut self.selections[i];
             *sel = sel.collapsed();
+        }
+    }
+
+    pub fn sort(&mut self) {
+        for i in 0..self.selections.len() {
+            let sel = &mut self.selections[i];
+            *sel = sel.sorted().update_last_direction();
         }
     }
 }
@@ -246,20 +253,17 @@ impl Buffer {
     }
 
     pub fn insert(&mut self, s: &str) {
-        let mut insertion_points =
-            self.map_each_enumerated_selection(|i, sel, _text| (i, sel.cursor));
-        insertion_points.sort_by_key(|&(_, idx)| idx);
+        let mut insertion_points = self.map_each_selection_mut(|sel, _text| sel.cursor);
+        insertion_points.sort();
         insertion_points.reverse();
 
         // we insert from the back, fixing idx past the insertion every time
         // this is O(n^2) while it could be O(n)
-        for (i, (_, idx)) in insertion_points.iter().enumerate() {
+        for idx in insertion_points {
+            self.selection.collapse();
+            self.selection.sort();
+            self.selection.fix_before_insert(idx, s.len());
             self.text.insert(idx.0, s);
-            for fixing_i in 0..=i {
-                let fixing_sel = &mut self.selection.selections[insertion_points[fixing_i].0];
-                fixing_sel.cursor = fixing_sel.cursor.forward(s.len(), &self.text);
-                *fixing_sel = fixing_sel.collapsed();
-            }
         }
     }
     pub fn open(&mut self) {
