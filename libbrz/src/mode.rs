@@ -1,4 +1,4 @@
-use crate::coord::*;
+use crate::idx::*;
 use crate::Key;
 use crate::State;
 use default::default;
@@ -96,7 +96,7 @@ impl Mode {
         match key {
             Key::Esc => {}
             Key::Char('l') => {
-                state.buffer.move_cursor(|coord, text| {
+                state.buffer.move_cursor_coord(|coord, text| {
                     let line = text.line(coord.line);
                     coord.set_column(line.len_chars() - 1, text)
                 });
@@ -104,15 +104,15 @@ impl Mode {
             Key::Char('h') => {
                 state
                     .buffer
-                    .move_cursor(|coord, text| coord.set_column(0, text));
+                    .move_cursor_coord(|coord, text| coord.set_column(0, text));
             }
             Key::Char('k') => {
-                state.buffer.move_cursor(|coord, text| {
+                state.buffer.move_cursor_coord(|coord, text| {
                     coord.set_line(0, text).trim_column_to_buf(text).into()
                 });
             }
             Key::Char('j') => {
-                state.buffer.move_cursor(|coord, text| {
+                state.buffer.move_cursor_coord(|coord, text| {
                     coord
                         .set_line(text.len_lines().saturating_sub(1), text)
                         .trim_column_to_buf(text)
@@ -122,7 +122,7 @@ impl Mode {
             Key::Char('i') => {
                 state
                     .buffer
-                    .move_cursor(|coord, text| coord.before_first_non_whitespace(text));
+                    .move_cursor_coord(|coord, text| coord.before_first_non_whitespace(text));
             }
             _ => {}
         }
@@ -205,7 +205,7 @@ impl Normal {
                 if let Some(num_prefix) = self.num_prefix {
                     state
                         .buffer
-                        .move_cursor(|coord, text| coord.set_line(num_prefix, text));
+                        .move_cursor_coord(|coord, text| coord.set_line(num_prefix, text));
                     state.mode = Mode::default();
                 } else {
                     state.mode = Mode::Goto
@@ -272,16 +272,16 @@ impl Normal {
                 state.buffer.paste_extend(&state.yanked);
             }
             Key::Char('w') => {
-                state.buffer.move_cursor_2(Coord::forward_word);
+                state.buffer.move_cursor_2(Idx::forward_word);
             }
             Key::Char('W') => {
-                state.buffer.extend_cursor_2(Coord::forward_word);
+                state.buffer.extend_cursor_2(Idx::forward_word);
             }
             Key::Char('b') => {
-                state.buffer.move_cursor_2(Coord::backward_word);
+                state.buffer.move_cursor_2(Idx::backward_word);
             }
             Key::Char('B') => {
-                state.buffer.extend_cursor_2(Coord::backward_word);
+                state.buffer.extend_cursor_2(Idx::backward_word);
             }
             Key::Char('x') => {
                 state.buffer.move_line();

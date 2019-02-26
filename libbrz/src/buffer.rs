@@ -26,24 +26,31 @@ fn distance_to_next_tabstop_test() {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelectionSet {
     pub primary: usize,
-    pub selections: Vec<SelectionUnaligned>,
+    pub selections: Vec<Selection>,
+    /// If this is non-empty, it contains column position, recorded,
+    /// to preserve a column during up/down moves between lines
+    /// that might be shorter
+    pub cursor_column: Vec<usize>,
 }
 
 impl Default for SelectionSet {
     fn default() -> Self {
-        let sel = SelectionUnaligned::default();
+        let sel = Selection::default();
         Self {
             selections: vec![sel],
             primary: 0,
+            cursor_column: vec![],
         }
     }
 }
 
 impl SelectionSet {
-    pub fn to_lines(&self) -> BTreeSet<usize> {
+    pub fn to_lines(&self, text: &Rope) -> BTreeSet<usize> {
         let mut lines = BTreeSet::new();
         for s in &self.selections {
             let (from, to) = s.sorted();
+            let from = from.to_coord(text);
+            let to = to.to_coord(text);
             for line in from.line..=to.line {
                 lines.insert(line);
             }
@@ -51,37 +58,74 @@ impl SelectionSet {
         lines
     }
 
-    pub fn fix_after_insert(&mut self, idx: Idx, len: usize, text: &Rope) {
+    pub fn fix_before_insert(&mut self, idx: Idx, len: usize) {
         for i in 0..self.selections.len() {
             let sel = &mut self.selections[i];
-            let cursor_idx = sel.cursor.to_idx(text);
-            let anchor_idx = sel.cursor.to_idx(text);
+            let cursor_idx = &mut sel.cursor;
+            let anchor_idx = &mut sel.anchor;
 
-            if idx <= cursor_idx {
-                sel.cursor = Idx(cursor_idx.0.saturating_add(len)).to_coord(text);
+            if idx <= *cursor_idx {
+                *cursor_idx = Idx(cursor_idx.0.saturating_add(len));
             }
-            if idx <= anchor_idx {
-                sel.anchor = Idx(anchor_idx.0.saturating_add(len)).to_coord(text);
+            if idx <= *anchor_idx {
+                *anchor_idx = Idx(anchor_idx.0.saturating_add(len));
             }
         }
     }
 
-    pub fn fix_after_delete(&mut self, idx: Idx, len: usize, text: &Rope) {
+    pub fn fix_before_extend(&mut self, idx: Idx, len: usize) {
         for i in 0..self.selections.len() {
             let sel = &mut self.selections[i];
-            let cursor_idx = sel.cursor.to_idx(text);
-            let anchor_idx = sel.anchor.to_idx(text);
-            if idx.forward(len, text) < cursor_idx {
-                sel.cursor = Idx(cursor_idx.0.saturating_sub(len)).to_coord(text);
-            } else if idx < cursor_idx {
-                sel.cursor = Idx(cursor_idx.0.saturating_sub(cursor_idx.0 - idx.0)).to_coord(text);
-            }
-            if idx.forward(len, text) < anchor_idx {
-                sel.anchor = Idx(anchor_idx.0.saturating_sub(len)).to_coord(text);
-            } else if idx < anchor_idx {
-                sel.anchor = Idx(anchor_idx.0.saturating_sub(anchor_idx.0 - idx.0)).to_coord(text);
+            let cursor_idx = &mut sel.cursor;
+            let anchor_idx = &mut sel.anchor;
+            if *cursor_idx < *anchor_idx {
+                if idx < *cursor_idx {
+                    *cursor_idx = Idx(cursor_idx.0.saturating_add(len));
+                }
+                if idx <= *anchor_idx {
+                    *anchor_idx = Idx(anchor_idx.0.saturating_add(len));
+                }
+            } else {
+                if idx <= *cursor_idx {
+                    *cursor_idx = Idx(cursor_idx.0.saturating_add(len));
+                }
+                if idx < *anchor_idx {
+                    *anchor_idx = Idx(anchor_idx.0.saturating_add(len));
+                }
             }
         }
+    }
+
+    pub fn fix_before_delete(&mut self, idx: Idx, len: usize) {
+        for i in 0..self.selections.len() {
+            let sel = &mut self.selections[i];
+            let cursor_idx = &mut sel.cursor;
+            let anchor_idx = &mut sel.anchor;
+            if idx < cursor_idx.backward(len) {
+                *cursor_idx = Idx(cursor_idx.0.saturating_sub(len));
+            } else if idx < *cursor_idx {
+                *cursor_idx = Idx(cursor_idx.0.saturating_sub(cursor_idx.0 - idx.0));
+            }
+            if idx < anchor_idx.backward(len) {
+                *anchor_idx = Idx(anchor_idx.0.saturating_sub(len));
+            } else if idx < *anchor_idx {
+                *anchor_idx = Idx(anchor_idx.0.saturating_sub(anchor_idx.0 - idx.0));
+            }
+        }
+    }
+
+    pub fn maybe_save_cursor_column(&mut self, text: &Rope) {
+        if self.cursor_column.is_empty() {
+            self.cursor_column = self
+                .selections
+                .iter()
+                .map(|s| s.cursor.to_coord(text).column)
+                .collect();
+        }
+    }
+
+    pub fn clear_cursor_column(&mut self) {
+        self.cursor_column.clear();
     }
 }
 
@@ -112,7 +156,7 @@ impl Buffer {
 
     fn for_each_selection<F, R>(&self, mut f: F) -> Vec<R>
     where
-        F: FnMut(&SelectionUnaligned, &Rope) -> R,
+        F: FnMut(&Selection, &Rope) -> R,
     {
         let Self {
             ref selection,
@@ -129,7 +173,7 @@ impl Buffer {
 
     fn map_each_selection_mut<F, R>(&mut self, mut f: F) -> Vec<R>
     where
-        F: FnMut(&mut SelectionUnaligned, &mut Rope) -> R,
+        F: FnMut(&mut Selection, &mut Rope) -> R,
     {
         let Self {
             ref mut selection,
@@ -150,7 +194,7 @@ impl Buffer {
 
     fn map_each_enumerated_selection<F, R>(&self, mut f: F) -> Vec<R>
     where
-        F: FnMut(usize, &SelectionUnaligned, &Rope) -> R,
+        F: FnMut(usize, &Selection, &Rope) -> R,
     {
         let Self {
             ref selection,
@@ -168,7 +212,7 @@ impl Buffer {
 
     fn map_each_enumerated_selection_mut<F, R>(&mut self, mut f: F) -> Vec<R>
     where
-        F: FnMut(usize, &mut SelectionUnaligned, &mut Rope) -> R,
+        F: FnMut(usize, &mut Selection, &mut Rope) -> R,
     {
         let Self {
             ref mut selection,
@@ -193,7 +237,7 @@ impl Buffer {
         {
             VisualSelection::Selection
         } else if self.selection.selections.iter().any(|sel| {
-            sel.is_empty(&self.text) && sel.aligned(&self.text).is_idx_inside_direction_marker(idx)
+            sel.is_empty() && sel.aligned(&self.text).is_idx_inside_direction_marker(idx)
         }) {
             VisualSelection::DirectionMarker
         } else {
@@ -210,9 +254,8 @@ impl Buffer {
     }
 
     pub fn insert(&mut self, s: &str) {
-        let mut insertion_points = self.map_each_enumerated_selection(|i, sel, text| {
-            (i, sel.cursor.trim_column_to_buf(text).to_idx(text))
-        });
+        let mut insertion_points =
+            self.map_each_enumerated_selection(|i, sel, _text| (i, sel.cursor));
         insertion_points.sort_by_key(|&(_, idx)| idx);
         insertion_points.reverse();
 
@@ -229,8 +272,8 @@ impl Buffer {
     }
     pub fn open(&mut self) {
         let mut indents = self.map_each_enumerated_selection(|i, sel, text| {
-            let line_begining = sel.cursor.backward_to_line_start(text).to_idx(text).0;
-            let indent_end = sel.cursor.before_first_non_whitespace(text).to_idx(text).0;
+            let line_begining = sel.cursor.backward_to_line_start(text).0;
+            let indent_end = sel.cursor.before_first_non_whitespace(text).0;
             let indent: Rope = text.slice(line_begining..indent_end).into();
             let line_end = sel.cursor.forward_to_line_end(text);
             (i, indent, line_end)
@@ -241,9 +284,8 @@ impl Buffer {
         // we insert from the back, fixing idx past the insertion every time
         // this is O(n^2) while it could be O(n)
         for (i, (_, indent, line_end)) in indents.iter().enumerate() {
-            self.text
-                .insert(line_end.to_idx(&self.text).0, &indent.to_string());
-            self.text.insert_char(line_end.to_idx(&self.text).0, '\n');
+            self.text.insert(line_end.0, &indent.to_string());
+            self.text.insert_char(line_end.0, '\n');
             let sel = &mut self.selection.selections[indents[i].0];
             sel.cursor = *line_end;
             for fixing_i in 0..=i {
@@ -290,9 +332,8 @@ impl Buffer {
     }
 
     pub fn paste(&mut self, yanked: &[Rope]) {
-        let mut insertion_points = self.map_each_enumerated_selection(|i, sel, text| {
-            (i, sel.cursor.trim_column_to_buf(text).to_idx(text))
-        });
+        let mut insertion_points =
+            self.map_each_enumerated_selection(|i, sel, _text| (i, sel.cursor));
         insertion_points.sort_by_key(|&(_, idx)| idx);
         insertion_points.reverse();
 
@@ -316,21 +357,11 @@ impl Buffer {
                 }
                 for fixing_i in 0..i {
                     let fixing_sel = &mut self.selection.selections[insertion_points[fixing_i].0];
-                    if *idx
-                        <= fixing_sel
-                            .cursor
-                            .trim_column_to_buf(&self.text)
-                            .to_idx(&self.text)
-                    {
+                    if *idx <= fixing_sel.cursor {
                         fixing_sel.cursor =
                             fixing_sel.cursor.forward(to_yank.len_chars(), &self.text);
                     }
-                    if *idx
-                        <= fixing_sel
-                            .anchor
-                            .trim_column_to_buf(&self.text)
-                            .to_idx(&self.text)
-                    {
+                    if *idx <= fixing_sel.anchor {
                         fixing_sel.anchor =
                             fixing_sel.anchor.forward(to_yank.len_chars(), &self.text);
                     }
@@ -340,49 +371,20 @@ impl Buffer {
     }
 
     pub fn paste_extend(&mut self, yanked: &[Rope]) {
-        let mut insertion_points = self.map_each_enumerated_selection(|i, sel, text| {
-            (i, sel.cursor.trim_column_to_buf(text).to_idx(text))
-        });
-        insertion_points.sort_by_key(|&(_, idx)| idx);
+        let mut insertion_points = self.map_each_enumerated_selection(|_i, sel, _text| sel.cursor);
+        insertion_points.sort();
         insertion_points.reverse();
 
-        // we insert from the back, fixing idx past the insertion every time
-        // this is O(n^2) while it could be O(n)
-        for (i, (_, idx)) in insertion_points.iter().enumerate() {
+        for (i, idx) in insertion_points.iter().enumerate() {
+            if let Some(to_yank) = yanked.get(i) {
+                self.selection.fix_before_extend(*idx, to_yank.len_chars());
+            }
+        }
+
+        for (i, idx) in insertion_points.iter().enumerate() {
             if let Some(to_yank) = yanked.get(i) {
                 for chunk in to_yank.chunks() {
                     self.text.insert(idx.0, chunk);
-                }
-                {
-                    let fixing_sel = &mut self.selection.selections[insertion_points[i].0];
-                    if fixing_sel.aligned(&self.text).is_forward() {
-                        fixing_sel.cursor =
-                            fixing_sel.cursor.forward(to_yank.len_chars(), &self.text);
-                    } else {
-                        fixing_sel.anchor =
-                            fixing_sel.anchor.forward(to_yank.len_chars(), &self.text);
-                    }
-                }
-                for fixing_i in 0..i {
-                    let fixing_sel = &mut self.selection.selections[insertion_points[fixing_i].0];
-                    if *idx
-                        <= fixing_sel
-                            .cursor
-                            .trim_column_to_buf(&self.text)
-                            .to_idx(&self.text)
-                    {
-                        fixing_sel.cursor =
-                            fixing_sel.cursor.forward(to_yank.len_chars(), &self.text);
-                    }
-                    if *idx
-                        <= fixing_sel
-                            .anchor
-                            .trim_column_to_buf(&self.text)
-                            .to_idx(&self.text)
-                    {
-                        fixing_sel.anchor =
-                            fixing_sel.anchor.forward(to_yank.len_chars(), &self.text);
-                    }
                 }
             }
         }
@@ -391,10 +393,13 @@ impl Buffer {
     /// Remove text at given ranges
     ///
     /// `removal_points` contains list of `(selection_index, range)`,
-    fn remove_ranges(&mut self, removal_points: Vec<std::ops::Range<usize>>) {
+    fn remove_ranges(&mut self, mut removal_points: Vec<std::ops::Range<usize>>) {
+        removal_points.sort_by(|a, b| a.start.cmp(&b.start));
+        removal_points.reverse();
+
         for range in &removal_points {
             self.selection
-                .fix_after_delete(Idx(range.start), range.len(), &self.text);
+                .fix_before_delete(Idx(range.start), range.len());
         }
 
         // remove has to be after fixes, otherwise to_idx conversion
@@ -418,7 +423,7 @@ impl Buffer {
 
     pub fn move_cursor<F>(&mut self, f: F)
     where
-        F: Fn(Coord, &Rope) -> Coord,
+        F: Fn(Idx, &Rope) -> Idx,
     {
         self.map_each_selection_mut(|sel, text| {
             let new_cursor = f(sel.cursor, text);
@@ -427,9 +432,22 @@ impl Buffer {
         });
     }
 
+    pub fn move_cursor_with_column<F>(&mut self, f: F)
+    where
+        F: Fn(Idx, Option<usize>, &Rope) -> Idx,
+    {
+        let selection = self.selection.clone();
+        self.map_each_enumerated_selection_mut(|i, sel, text| {
+            let column = selection.cursor_column.get(i).cloned();
+            let new_cursor = f(sel.cursor, column, text);
+            sel.anchor = sel.cursor;
+            sel.cursor = new_cursor;
+        });
+    }
+
     pub fn move_cursor_2<F>(&mut self, f: F)
     where
-        F: Fn(Coord, &Rope) -> (Coord, Coord),
+        F: Fn(Idx, &Rope) -> (Idx, Idx),
     {
         self.map_each_selection_mut(|sel, text| {
             let (new_anchor, new_cursor) = f(sel.cursor, text);
@@ -440,16 +458,27 @@ impl Buffer {
 
     pub fn extend_cursor<F>(&mut self, f: F)
     where
-        F: Fn(Coord, &Rope) -> Coord,
+        F: Fn(Idx, &Rope) -> Idx,
     {
         self.map_each_selection_mut(|sel, text| {
             sel.cursor = f(sel.cursor, text);
         });
     }
 
+    pub fn extend_cursor_with_column<F>(&mut self, f: F)
+    where
+        F: Fn(Idx, Option<usize>, &Rope) -> Idx,
+    {
+        let selection = self.selection.clone();
+        self.map_each_enumerated_selection_mut(|i, sel, text| {
+            let column = selection.cursor_column.get(i).cloned();
+            sel.cursor = f(sel.cursor, column, text);
+        });
+    }
+
     pub fn extend_cursor_2<F>(&mut self, f: F)
     where
-        F: Fn(Coord, &Rope) -> (Coord, Coord),
+        F: Fn(Idx, &Rope) -> (Idx, Idx),
     {
         self.map_each_selection_mut(|sel, text| {
             let (_new_anchor, new_cursor) = f(sel.cursor, text);
@@ -459,7 +488,7 @@ impl Buffer {
 
     pub fn change_selection<F>(&mut self, f: F)
     where
-        F: Fn(Coord, Coord, &Rope) -> (Coord, Coord),
+        F: Fn(Idx, Idx, &Rope) -> (Idx, Idx),
     {
         self.map_each_selection_mut(|sel, text| {
             let (new_cursor, new_anchor) = f(sel.cursor, sel.anchor, text);
@@ -468,50 +497,78 @@ impl Buffer {
         });
     }
 
+    pub fn move_cursor_coord<F>(&mut self, f: F)
+    where
+        F: Fn(Coord, &Rope) -> Coord,
+    {
+        self.map_each_selection_mut(|sel, text| {
+            let new_cursor = f(sel.cursor.to_coord(text), text);
+            sel.anchor = sel.cursor;
+            sel.cursor = new_cursor.to_idx(text);
+        });
+    }
+
+    pub fn extend_cursor_coord<F>(&mut self, f: F)
+    where
+        F: Fn(Coord, &Rope) -> Coord,
+    {
+        self.map_each_selection_mut(|sel, text| {
+            sel.cursor = f(sel.cursor.to_coord(text), text).to_idx(text);
+        });
+    }
     pub fn move_cursor_backward(&mut self, n: usize) {
-        self.move_cursor(|coord, text| coord.backward(n, text));
+        self.selection.clear_cursor_column();
+        self.move_cursor(|idx, _text| idx.backward(n));
     }
 
     pub fn move_cursor_forward(&mut self, n: usize) {
-        self.move_cursor(|coord, text| coord.forward(n, text));
+        self.selection.clear_cursor_column();
+        self.move_cursor(|idx, text| idx.forward(n, text));
     }
 
     pub fn move_cursor_down(&mut self, n: usize) {
-        self.move_cursor(|coord, text| coord.down_unaligned(n, text));
+        self.selection.maybe_save_cursor_column(&self.text);
+
+        self.move_cursor_with_column(|idx, column, text| idx.down_unaligned(n, column, text));
     }
 
     pub fn move_cursor_up(&mut self, n: usize) {
-        self.move_cursor(|coord, text| coord.up_unaligned(n, text));
-    }
-
-    pub fn extend_cursor_backward(&mut self, n: usize) {
-        self.extend_cursor(|coord, text| coord.backward(n, text));
-    }
-
-    pub fn extend_cursor_forward(&mut self, n: usize) {
-        self.extend_cursor(|coord, text| coord.forward(n, text));
+        self.selection.maybe_save_cursor_column(&self.text);
+        self.move_cursor_with_column(|idx, column, text| idx.up_unaligned(n, column, text));
     }
 
     pub fn extend_cursor_down(&mut self, n: usize) {
-        self.extend_cursor(|coord, text| coord.down_unaligned(n, text));
+        self.selection.maybe_save_cursor_column(&self.text);
+        self.extend_cursor_with_column(|idx, column, text| idx.down_unaligned(n, column, text));
     }
 
     pub fn extend_cursor_up(&mut self, n: usize) {
-        self.extend_cursor(|coord, text| coord.up_unaligned(n, text));
+        self.selection.maybe_save_cursor_column(&self.text);
+        self.extend_cursor_with_column(|idx, column, text| idx.up_unaligned(n, column, text));
+    }
+
+    pub fn extend_cursor_backward(&mut self, n: usize) {
+        self.selection.clear_cursor_column();
+        self.extend_cursor(|idx, _text| idx.backward(n));
+    }
+
+    pub fn extend_cursor_forward(&mut self, n: usize) {
+        self.selection.clear_cursor_column();
+        self.extend_cursor(|idx, text| idx.forward(n, text));
     }
 
     pub fn move_cursor_forward_word(&mut self) {
-        self.move_cursor_2(Coord::forward_word)
+        self.selection.clear_cursor_column();
+        self.move_cursor_2(Idx::forward_word)
     }
 
     pub fn move_cursor_backward_word(&mut self) {
-        self.move_cursor_2(Coord::backward_word)
+        self.selection.clear_cursor_column();
+        self.move_cursor_2(Idx::backward_word)
     }
 
     pub fn cursor_pos(&self) -> Coord {
-        self.selection.selections[0]
-            .cursor
-            .trim_column_to_buf(&self.text)
+        self.selection.selections[0].cursor.to_coord(&self.text)
     }
 
     pub fn move_line(&mut self) {
@@ -529,7 +586,7 @@ impl Buffer {
 
             (
                 cursor.forward_past_line_end(text),
-                if anchor.column == 0 {
+                if anchor.to_coord(text).column == 0 {
                     anchor
                 } else {
                     anchor.backward_to_line_start(text)
@@ -539,25 +596,22 @@ impl Buffer {
     }
 
     pub fn select_all(&mut self) {
-        self.selection.selections = vec![SelectionUnaligned::from_selection(
-            if self.selection.selections[self.selection.primary]
-                .aligned(&self.text)
-                .is_forward()
-            {
-                Selection {
-                    anchor: Idx(0),
-                    cursor: Idx(self.text.len_chars()),
-                    was_forward: true,
-                }
-            } else {
-                Selection {
-                    cursor: Idx(0),
-                    anchor: Idx(self.text.len_chars()),
-                    was_forward: false,
-                }
-            },
-            &self.text,
-        )];
+        self.selection.selections = vec![if self.selection.selections[self.selection.primary]
+            .aligned(&self.text)
+            .is_forward()
+        {
+            Selection {
+                anchor: Idx(0),
+                cursor: Idx(self.text.len_chars()),
+                was_forward: true,
+            }
+        } else {
+            Selection {
+                cursor: Idx(0),
+                anchor: Idx(self.text.len_chars()),
+                was_forward: false,
+            }
+        }];
     }
 
     pub fn collapse(&mut self) {
@@ -586,12 +640,12 @@ impl Buffer {
     }
 
     pub fn increase_indent(&self, _times: usize) {
-        let _affected_lines = self.selection.to_lines();
+        let _affected_lines = self.selection.to_lines(&self.text);
         unimplemented!();
     }
 
     pub fn decrease_indent(&self, _times: usize) {
-        let _affected_lines = self.selection.to_lines();
+        let _affected_lines = self.selection.to_lines(&self.text);
         unimplemented!();
     }
 }

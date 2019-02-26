@@ -84,7 +84,7 @@ impl SelectionUnaligned {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 /// Selection with coordinates aligned
 ///
 /// As coordinates are aligned, it's OK to keep
@@ -96,6 +96,18 @@ pub struct Selection {
 }
 
 impl Selection {
+    pub fn update_last_direction(mut self) -> Self {
+        let anchor = self.anchor;
+        let cursor = self.cursor;
+
+        if anchor < cursor {
+            self.was_forward = true;
+        } else if cursor < anchor {
+            self.was_forward = false;
+        }
+
+        self
+    }
     pub fn aligned(mut self, text: &Rope) -> Self {
         self.anchor = self.anchor.aligned(text);
         self.cursor = self.cursor.aligned(text);
@@ -182,5 +194,9 @@ impl Selection {
             cursor: self.anchor,
             was_forward: !self.was_forward,
         }
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.cursor == self.anchor
     }
 }

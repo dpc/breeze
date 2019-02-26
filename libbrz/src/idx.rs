@@ -36,7 +36,7 @@ fn char_is_not_newline(ch: char) -> bool {
 pub struct Idx(pub usize);
 
 impl Idx {
-    pub fn backward(self, n: usize, _text: &Rope) -> Self {
+    pub fn backward(self, n: usize) -> Self {
         Idx(self.0.saturating_sub(n))
     }
     pub fn forward(self, n: usize, text: &Rope) -> Self {
@@ -141,6 +141,30 @@ impl Idx {
             cur -= 1;
         }
         cur
+    }
+
+    pub fn down_unaligned(self, n: usize, column: Option<usize>, text: &Rope) -> Self {
+        let mut coord = self.to_coord(text);
+        coord.line = coord.line.saturating_add(n);
+        if let Some(column) = column {
+            coord.column = column;
+        }
+        coord.trim_line_to_buf(text).to_idx(text)
+    }
+
+    pub fn up_unaligned(self, n: usize, column: Option<usize>, text: &Rope) -> Self {
+        let mut coord = self.to_coord(text);
+        coord.line = coord.line.saturating_sub(n);
+        if let Some(column) = column {
+            coord.column = column;
+        }
+        coord.trim_line_to_buf(text).to_idx(text)
+    }
+
+    pub fn before_first_non_whitespace(self, text: &Rope) -> Self {
+        self.to_coord(text)
+            .before_first_non_whitespace(text)
+            .to_idx(text)
     }
 
     pub fn saturating_add(self, n: usize) -> Self {

@@ -105,7 +105,7 @@ impl Coord {
     }
 
     pub fn backward(self, n: usize, text: &Rope) -> Self {
-        self.map_as_idx(text, |idx| idx.backward(n, text))
+        self.map_as_idx(text, |idx| idx.backward(n))
     }
 
     pub fn forward_word(self, text: &Rope) -> (Self, Self) {
