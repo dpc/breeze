@@ -28,7 +28,7 @@ fn char_is_newline(ch: char) -> bool {
     ch == '\n'
 }
 
-fn char_is_not_newline(ch: char) -> bool {
+pub fn char_is_not_newline(ch: char) -> bool {
     ch != '\n'
 }
 
@@ -163,7 +163,7 @@ impl Idx {
 
     pub fn before_first_non_whitespace(self, text: &Rope) -> Self {
         self.to_coord(text)
-            .before_first_non_whitespace(text)
+            .after_leading_whitespace(text)
             .to_idx(text)
     }
 

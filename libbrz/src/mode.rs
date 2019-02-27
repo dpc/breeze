@@ -64,7 +64,7 @@ impl Mode {
                 state.buffer.open();
             }
             Key::Char('\t') => {
-                state.buffer.insert_char('\t');
+                state.buffer.insert_tab();
             }
             Key::Backspace => {
                 state.buffer.backspace();
@@ -122,7 +122,7 @@ impl Mode {
             Key::Char('i') => {
                 state
                     .buffer
-                    .move_cursor_coord(|coord, text| coord.before_first_non_whitespace(text));
+                    .move_cursor_coord(|coord, text| coord.after_leading_whitespace(text));
             }
             _ => {}
         }

@@ -16,10 +16,22 @@ pub fn distance_to_next_tabstop(visual_column: usize, tabstop: usize) -> usize {
     next_tabstop - visual_column
 }
 
+pub fn distance_to_prev_tabstop(visual_column: usize, tabstop: usize) -> usize {
+    let tabstop = visual_column.saturating_sub(1) / tabstop * tabstop;
+    visual_column - tabstop
+}
+
 #[test]
 fn distance_to_next_tabstop_test() {
     for (v_col, expected) in &[(0, 4), (1, 3), (2, 2), (3, 1), (4, 4)] {
         assert_eq!(distance_to_next_tabstop(*v_col, 4), *expected);
+    }
+}
+
+#[test]
+fn distance_to_prev_tabstop_test() {
+    for (v_col, expected) in &[(0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 1)] {
+        assert_eq!(distance_to_prev_tabstop(*v_col, 4), *expected);
     }
 }
 
@@ -136,6 +148,7 @@ pub struct Buffer {
     pub text: ropey::Rope,
     pub selection: SelectionSet,
     pub tabstop: usize,
+    pub expand_tabs: bool,
 }
 
 impl Default for Buffer {
@@ -144,6 +157,7 @@ impl Default for Buffer {
             text: Rope::default(),
             tabstop: 4,
             selection: default(),
+            expand_tabs: true,
         }
     }
 }
@@ -154,6 +168,23 @@ impl Buffer {
     }
 
     fn for_each_selection<F, R>(&self, mut f: F) -> Vec<R>
+    where
+        F: FnMut(&Selection, &Rope) -> R,
+    {
+        let Self {
+            ref selection,
+            ref text,
+            ..
+        } = *self;
+
+        selection
+            .selections
+            .iter()
+            .map(|sel| f(sel, text))
+            .collect()
+    }
+
+    fn map_each_selection<F, R>(&self, mut f: F) -> Vec<R>
     where
         F: FnMut(&Selection, &Rope) -> R,
     {
@@ -250,6 +281,28 @@ impl Buffer {
 
     pub fn insert_char(&mut self, ch: char) {
         self.insert(&(ch.to_string()));
+    }
+
+    pub fn insert_tab(&mut self) {
+        if self.expand_tabs {
+            let mut insertions = self.map_each_selection(|sel, text| {
+                let v_col = self.to_visual(sel.cursor.to_coord(text)).column;
+
+                (sel.cursor, distance_to_next_tabstop(v_col, self.tabstop))
+            });
+
+            insertions.sort_by_key(|insertion| insertion.0);
+            insertions.reverse();
+
+            for (idx, n) in insertions {
+                self.selection.collapse();
+                self.selection.sort();
+                self.selection.fix_on_insert(idx, n);
+                self.text.insert(idx.0, &" ".repeat(n));
+            }
+        } else {
+            self.insert_char('\t');
+        }
     }
 
     pub fn insert(&mut self, s: &str) {
@@ -368,7 +421,7 @@ impl Buffer {
         }
     }
 
-    pub fn backspace(&mut self) {
+    pub fn backspace_one(&mut self) {
         let removal_points = self.map_each_enumerated_selection_mut(|_, sel, text| {
             let sel_aligned = sel.aligned(text);
             let range = (sel_aligned.cursor.0 - 1)..sel_aligned.cursor.0;
@@ -378,6 +431,38 @@ impl Buffer {
         });
 
         self.remove_ranges(removal_points);
+    }
+
+    pub fn backspace(&mut self) {
+        if self.expand_tabs {
+            let mut removal = self.map_each_selection(|sel, text| {
+                let v_col = self.to_visual(sel.cursor.to_coord(text)).column;
+
+                (
+                    sel.cursor,
+                    if v_col == 0 {
+                        1
+                    } else if sel.cursor == sel.cursor.before_first_non_whitespace(text) {
+                        distance_to_prev_tabstop(v_col, self.tabstop)
+                    } else {
+                        1
+                    },
+                )
+            });
+
+            removal.sort_by_key(|r| r.0);
+            removal.reverse();
+
+            self.selection.collapse();
+            self.selection.sort();
+            for (idx, n) in removal {
+                let start = idx.backward(n);
+                self.selection.fix_on_delete(start, idx.0 - start.0);
+                self.text.remove(start.0..idx.0);
+            }
+        } else {
+            self.backspace_one();
+        }
     }
 
     pub fn move_cursor<F>(&mut self, f: F)
