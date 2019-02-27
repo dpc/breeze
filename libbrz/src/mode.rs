@@ -203,9 +203,9 @@ impl Normal {
             }
             Key::Char('g') => {
                 if let Some(num_prefix) = self.num_prefix {
-                    state
-                        .buffer
-                        .move_cursor_coord(|coord, text| coord.set_line(num_prefix, text));
+                    state.buffer.move_cursor_coord(|coord, text| {
+                        coord.set_line(num_prefix.saturating_sub(1), text)
+                    });
                     state.mode = Mode::default();
                 } else {
                     state.mode = Mode::Goto
