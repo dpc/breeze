@@ -8,6 +8,7 @@ use termion::event::Event;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 use termion::screen::*;
+use termion::style;
 
 use ropey::Rope;
 
@@ -42,6 +43,7 @@ struct CachingAnsciWriter {
     buf: Vec<u8>,
     cur_fg: Option<u8>,
     cur_bg: Option<u8>,
+    cur_bold: bool,
 }
 
 impl CachingAnsciWriter {
@@ -59,10 +61,20 @@ impl CachingAnsciWriter {
             self.cur_bg = None;
             write!(&mut self.buf, "{}", color::Bg(color::Reset),)?;
         }
+        if self.cur_bold {
+            self.cur_bold = false;
+            eprintln!("sdf");
+            write!(&mut self.buf, "{}", style::Reset)?;
+        }
         Ok(())
     }
 
-    fn change_color(&mut self, fg: color::AnsiValue, bg: color::AnsiValue) -> io::Result<()> {
+    fn change_color(
+        &mut self,
+        fg: color::AnsiValue,
+        bg: color::AnsiValue,
+        bold: bool,
+    ) -> io::Result<()> {
         if self.cur_fg != Some(fg.0) {
             self.cur_fg = Some(fg.0);
             write!(&mut self.buf, "{}", color::Fg(fg),)?;
@@ -71,6 +83,16 @@ impl CachingAnsciWriter {
         if self.cur_bg != Some(bg.0) {
             self.cur_bg = Some(bg.0);
             write!(&mut self.buf, "{}", color::Bg(bg),)?;
+        }
+
+        if self.cur_bold != bold {
+            self.cur_bold = bold;
+            if bold {
+                write!(&mut self.buf, "{}", style::Bold)?;
+            } else {
+                eprintln!("df");
+                write!(&mut self.buf, "{}", style::Reset)?;
+            }
         }
         Ok(())
     }
@@ -169,7 +191,7 @@ impl Breeze {
 
         buf.reset_color().unwrap();
 
-        write!(&mut buf, "{}", termion::clear::All).unwrap();
+        write!(&mut buf, "{}{}", style::Reset, termion::clear::All).unwrap();
         let window_height = self.display_rows - 1;
         let cursor_pos = self.state.buffer().cursor_pos();
         let max_start_line = cursor_pos.line.saturating_sub(self.window_margin);
@@ -236,11 +258,11 @@ impl Breeze {
                 if let Some(ch) = ch {
                     match visual_selection {
                         VisualSelection::DirectionMarker => {
-                            buf.change_color(color::AnsiValue(14), color::AnsiValue(10))
+                            buf.change_color(color::AnsiValue(14), color::AnsiValue(10), false)
                                 .unwrap();
                         }
                         VisualSelection::Selection => {
-                            buf.change_color(color::AnsiValue(16), color::AnsiValue(4))
+                            buf.change_color(color::AnsiValue(16), color::AnsiValue(4), false)
                                 .unwrap();
                         }
                         VisualSelection::None => {
