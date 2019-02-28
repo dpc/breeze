@@ -63,7 +63,7 @@ impl SelectionSet {
             let (from, to) = s.sorted_pair();
             let from = from.to_coord(text);
             let to = to.to_coord(text);
-            for line in from.line..=to.line {
+            for line in from.line..to.line {
                 lines.insert(line);
             }
         }
@@ -683,13 +683,52 @@ impl Buffer {
         }
     }
 
-    pub fn increase_indent(&self, _times: usize) {
-        let _affected_lines = self.selection.to_lines(&self.text);
-        unimplemented!();
+    pub fn increase_indent(&mut self, times: usize) {
+        let affected_lines = self.selection.to_lines(&self.text);
+        let mut insertions: Vec<_> = affected_lines
+            .into_iter()
+            .map(|line| Coord { line, column: 0 }.to_idx(&self.text))
+            .collect();
+
+        insertions.sort_by_key(|insertion| insertion.0);
+        insertions.reverse();
+
+        let text = if !self.expand_tabs {
+            "\t".to_owned()
+        } else {
+            " ".repeat(self.tabstop * times)
+        };
+
+        for idx in insertions {
+            self.selection.fix_on_insert(idx, text.len());
+            self.text.insert(idx.0, &text);
+        }
     }
 
-    pub fn decrease_indent(&self, _times: usize) {
-        let _affected_lines = self.selection.to_lines(&self.text);
-        unimplemented!();
+    pub fn decrease_indent(&mut self, times: usize) {
+        let affected_lines = self.selection.to_lines(&self.text);
+
+        let mut removals: Vec<_> = affected_lines
+            .into_iter()
+            .map(|line| Coord { line, column: 0 }.to_idx(&self.text))
+            .collect();
+
+        removals.sort_by_key(|insertion| insertion.0);
+        removals.reverse();
+
+        let text = if !self.expand_tabs {
+            "\t".to_owned()
+        } else {
+            " ".repeat(self.tabstop * times)
+        };
+
+        for idx in removals {
+            let range = idx.0..idx.0 + text.len();
+            let existing = self.text.slice(range.clone());
+            if existing == text {
+                self.selection.fix_on_delete(idx, text.len());
+                self.text.remove(range);
+            }
+        }
     }
 }
