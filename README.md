@@ -41,9 +41,9 @@ So I decided to hack together my own code editor to demonstrate / try them.
 Rust. Life is too short not to use Rust.
 
 Terminals can do `|`-shaped cursors now, people! We don't have to use the blocky
-cursor anymore! Am I really the only one to figure it out?
-In Breeze `|` is the only cursor shape. It feels more like a graphical text editor,
-than traditional CLI ones.
+cursor anymore! In Breeze `|` is the only cursor shape. Whole design assumes `|`-shaped
+cursor. It feels more like a graphical text editor,
+than traditional CLI ones. A fresh breeze in CLI terminal world.
 
 Kakoune seem very Vim-golf-centric. In Breeze the philosophy is slightly different.
 It doesn't matter to me in how many keystrokes one can perform certain editing operation.
@@ -77,3 +77,32 @@ cargo install -f
 ```
 
 to install.
+
+
+
+## How to use (what works)
+
+Breeze is modal. You are typically in the normal mode, enter insert mode with `i`, and leave it with `Esc`.
+You know... just like in Vim or Kakoune.
+
+Breeze has selections. Kind of like in Visual mode in Vim, just more automatic. If you've used Kakoune - they
+are very much like in Kakoune.
+
+In normal mode:
+
+
+Shift + key typically extends the selection, instead of changing it.
+
+
+Other actions that should work already:
+
+* basic moves: `hjklwb%`
+* numerical prefix for most of implemented stuff
+* basic insert mode: `i`, `o`, `Esc`
+* deletion: `d`, `c`
+* copy&paste `y`, `p`, `P`
+* `g` (followed by `h`, `j`, `k`, `l`)
+* `'` - switch selection direction
+* `<` and `>`
+* line selection: `x`, `X`
+* undo: `u` `U`
