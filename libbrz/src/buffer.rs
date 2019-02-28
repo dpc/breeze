@@ -61,9 +61,9 @@ impl SelectionSet {
         let mut lines = BTreeSet::new();
         for s in &self.selections {
             let (from, to) = s.sorted_pair();
+            let to = std::cmp::max(from, to.backward(1)).to_coord(text);
             let from = from.to_coord(text);
-            let to = to.to_coord(text);
-            for line in from.line..to.line {
+            for line in from.line..=to.line {
                 lines.insert(line);
             }
         }
@@ -716,17 +716,22 @@ impl Buffer {
         removals.sort_by_key(|insertion| insertion.0);
         removals.reverse();
 
-        let text = if !self.expand_tabs {
+        let indent_text = if !self.expand_tabs {
             "\t".to_owned()
         } else {
             " ".repeat(self.tabstop * times)
         };
 
         for idx in removals {
-            let range = idx.0..idx.0 + text.len();
+            let range_start = idx.0;
+            let range_end = idx.0.saturating_add(indent_text.len());
+            let range = range_start..range_end;
+            if range_end > self.text.len_chars() {
+                continue;
+            }
             let existing = self.text.slice(range.clone());
-            if existing == text {
-                self.selection.fix_on_delete(idx, text.len());
+            if existing == indent_text {
+                self.selection.fix_on_delete(idx, indent_text.len());
                 self.text.remove(range);
             }
         }
