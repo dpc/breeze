@@ -319,49 +319,33 @@ impl Buffer {
     }
 
     pub fn insert_enter(&mut self) {
-        let mut inserts = self.map_each_enumerated_selection(|i, sel, text| {
-            let line_begining = sel.cursor.backward_to_line_start(text).0;
-            let indent_end = sel.cursor.before_first_non_whitespace(text).0;
-            let indent: Rope = text.slice(line_begining..indent_end).into();
-            (i, indent, sel.cursor)
-        });
-        inserts.sort_by_key(|&(_, _, cursor)| cursor);
-        inserts.reverse();
-
-        for (i, (_, indent, cursor)) in inserts.iter().enumerate() {
-            self.text.insert(cursor.0, &indent.to_string());
-            self.text.insert_char(cursor.0, '\n');
-            let sel = &mut self.selection.selections[inserts[i].0];
-            sel.cursor = *cursor;
-            for fixing_i in 0..=i {
-                let fixing_sel = &mut self.selection.selections[inserts[fixing_i].0];
-                fixing_sel.cursor = fixing_sel
-                    .cursor
-                    .forward(1 + indent.len_chars(), &self.text);
-                fixing_sel.anchor = fixing_sel
-                    .anchor
-                    .forward(1 + indent.len_chars(), &self.text);
-                *fixing_sel = fixing_sel.collapsed().sorted();
-            }
-        }
+        self.open_impl(true);
     }
 
     pub fn open(&mut self) {
+        self.open_impl(false);
+    }
+
+    fn open_impl(&mut self, was_enter: bool) {
         let mut indents = self.map_each_enumerated_selection(|i, sel, text| {
             let line_begining = sel.cursor.backward_to_line_start(text).0;
             let indent_end = sel.cursor.before_first_non_whitespace(text).0;
             let indent: Rope = text.slice(line_begining..indent_end).into();
-            let line_end = sel.cursor.forward_to_line_end(text);
-            (i, indent, line_end)
+            let insert_idx = if was_enter {
+                sel.cursor
+            } else {
+                sel.cursor.forward_to_line_end(text)
+            };
+            (i, indent, insert_idx)
         });
-        indents.sort_by_key(|&(_, _, line_end)| line_end);
+        indents.sort_by_key(|&(_, _, insert_idx)| insert_idx);
         indents.reverse();
 
-        for (i, (_, indent, line_end)) in indents.iter().enumerate() {
-            self.text.insert(line_end.0, &indent.to_string());
-            self.text.insert_char(line_end.0, '\n');
+        for (i, (_, indent, insert_idx)) in indents.iter().enumerate() {
+            self.text.insert(insert_idx.0, &indent.to_string());
+            self.text.insert_char(insert_idx.0, '\n');
             let sel = &mut self.selection.selections[indents[i].0];
-            sel.cursor = *line_end;
+            sel.cursor = *insert_idx;
             for fixing_i in 0..=i {
                 let fixing_sel = &mut self.selection.selections[indents[fixing_i].0];
                 fixing_sel.cursor = fixing_sel
