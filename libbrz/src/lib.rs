@@ -67,6 +67,9 @@ pub struct State {
     buffer_history: Vec<Buffer>,
     buffer_history_undo_i: Option<usize>,
     yanked: Vec<Rope>,
+
+    cmd: String,
+    msg: Option<String>,
 }
 
 impl State {
@@ -76,6 +79,16 @@ impl State {
         }
         self.buffer_history_undo_i = None;
         self
+    }
+
+    pub fn cmd_string(&self) -> Option<String> {
+        if let Some(ref msg) = self.msg {
+            Some(msg.to_owned())
+        } else if let Mode::Command = self.mode {
+            Some(format!(":{}", self.cmd))
+        } else {
+            None
+        }
     }
 
     fn commit_undo_point(mut self) -> Self {
@@ -94,7 +107,8 @@ impl State {
         self.quit
     }
 
-    pub fn handle(self, key: Key) -> Self {
+    pub fn handle(mut self, key: Key) -> Self {
+        self.msg = None;
         self.mode.handle(self.clone(), key)
     }
 
@@ -120,6 +134,8 @@ impl Default for State {
             buffer_history: vec![],
             buffer_history_undo_i: None,
             yanked: vec![],
+            cmd: "".into(),
+            msg: None,
         }
     }
 }

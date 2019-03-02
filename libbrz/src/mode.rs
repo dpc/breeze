@@ -4,16 +4,17 @@ use crate::State;
 use default::default;
 use std::cmp;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Normal {
     num_prefix: Option<usize>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Mode {
     Normal(Normal),
     Insert,
     Goto,
+    Command,
 }
 
 impl Default for Mode {
@@ -29,6 +30,7 @@ impl Mode {
             Normal(_) => "normal",
             Insert => "insert",
             Goto => "goto",
+            Command => "command",
         }
     }
 
@@ -51,7 +53,37 @@ impl Mode {
         match self {
             Normal(normal) => normal.handle(state, key),
             Insert => self.handle_insert(state, key),
+            Command => self.handle_command_key(state, key),
             Goto => self.handle_goto(state, key),
+        }
+    }
+
+    fn handle_command_key(&self, mut state: State, key: Key) -> State {
+        match key {
+            Key::Esc => {
+                state.cmd = "".into();
+                state.mode = default();
+            }
+            Key::Char('\n') => {
+                eprintln!("cmd: {}", state.cmd);
+                self.handle_command(&mut state);
+                state.cmd = "".into();
+                state.mode = default();
+            }
+            Key::Char(ch) => {
+                state.cmd.push(ch);
+            }
+            _ => {}
+        }
+        state
+    }
+
+    fn handle_command(&self, state: &mut State) {
+        match state.cmd.as_str() {
+            "q" => {
+                state.quit = true;
+            }
+            _ => state.msg = Some(format!("unrecognized command: {}", state.cmd)),
         }
     }
 
@@ -198,8 +230,8 @@ impl Normal {
             Key::Char(' ') => {
                 state.buffer.collapse();
             }
-            Key::Char('q') => {
-                state.quit = true;
+            Key::Char(':') => {
+                state.mode = Mode::Command;
             }
             Key::Char('g') => {
                 if let Some(num_prefix) = self.num_prefix {

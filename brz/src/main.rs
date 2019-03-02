@@ -280,12 +280,27 @@ impl Breeze {
 
         // status
         buf.reset_color().unwrap();
-        write!(
-            &mut buf,
-            "{}{} {}",
-            termion::cursor::Goto(1, self.display_rows as u16),
+        if let Some(cmd_str) = self.state.cmd_string() {
+            write!(
+                &mut buf,
+                "{}{}",
+                termion::cursor::Goto(1, self.display_rows as u16),
+                cmd_str,
+            )
+            .unwrap();
+        }
+        let right_side_status = format!(
+            "{} {}",
             self.state.mode_name(),
             self.state.mode_num_prefix_str(),
+        );
+        write!(
+            &mut buf,
+            "{}",
+            termion::cursor::Goto(
+                (self.display_cols - right_side_status.len()) as u16,
+                self.display_rows as u16
+            ),
         )
         .unwrap();
 
