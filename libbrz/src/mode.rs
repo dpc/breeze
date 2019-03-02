@@ -93,7 +93,7 @@ impl Mode {
                 state.mode = default();
             }
             Key::Char('\n') => {
-                state.buffer.open();
+                state.buffer.insert_enter();
             }
             Key::Char('\t') => {
                 state.buffer.insert_tab();

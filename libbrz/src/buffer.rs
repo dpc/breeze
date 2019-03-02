@@ -318,6 +318,34 @@ impl Buffer {
         }
     }
 
+    pub fn insert_enter(&mut self) {
+        let mut inserts = self.map_each_enumerated_selection(|i, sel, text| {
+            let line_begining = sel.cursor.backward_to_line_start(text).0;
+            let indent_end = sel.cursor.before_first_non_whitespace(text).0;
+            let indent: Rope = text.slice(line_begining..indent_end).into();
+            (i, indent, sel.cursor)
+        });
+        inserts.sort_by_key(|&(_, _, cursor)| cursor);
+        inserts.reverse();
+
+        for (i, (_, indent, cursor)) in inserts.iter().enumerate() {
+            self.text.insert(cursor.0, &indent.to_string());
+            self.text.insert_char(cursor.0, '\n');
+            let sel = &mut self.selection.selections[inserts[i].0];
+            sel.cursor = *cursor;
+            for fixing_i in 0..=i {
+                let fixing_sel = &mut self.selection.selections[inserts[fixing_i].0];
+                fixing_sel.cursor = fixing_sel
+                    .cursor
+                    .forward(1 + indent.len_chars(), &self.text);
+                fixing_sel.anchor = fixing_sel
+                    .anchor
+                    .forward(1 + indent.len_chars(), &self.text);
+                *fixing_sel = fixing_sel.collapsed().sorted();
+            }
+        }
+    }
+
     pub fn open(&mut self) {
         let mut indents = self.map_each_enumerated_selection(|i, sel, text| {
             let line_begining = sel.cursor.backward_to_line_start(text).0;
