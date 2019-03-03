@@ -331,11 +331,14 @@ impl Buffer {
         insertion_points.sort();
         insertion_points.reverse();
 
+        self.selection.collapse();
+        self.selection.sort();
+
         for idx in insertion_points {
-            self.selection.collapse();
-            self.selection.sort();
-            self.selection.fix_on_insert(idx, s.len());
-            self.text.insert(idx.0, s);
+            if s.len() > 0 {
+                self.selection.fix_on_insert(idx, s.len());
+                self.text.insert(idx.0, s);
+            }
         }
     }
 
@@ -770,17 +773,15 @@ impl Buffer {
         let indent_text = self.indent_text(times);
 
         for idx in removals {
-            let range_start = idx.0;
-            let range_end = idx.0.saturating_add(indent_text.len());
-            let range = range_start..range_end;
-            if range_end > self.text.len_chars() {
+            let range = idx.range_to(idx.forward_n(indent_text.len(), &self.text));
+            if range.len() < indent_text.len() {
                 continue;
             }
-            let existing = self.text.slice(range.clone());
+            let existing = range.slice(&self.text);
             if existing == indent_text {
                 self.selection
                     .fix_on_delete(idx, indent_text.len(), &self.text);
-                self.text.remove(range);
+                range.remove_from(&mut self.text);
             }
         }
     }
