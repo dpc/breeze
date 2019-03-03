@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::{coord::*, idx::*, prelude::*, selection::*};
+use crate::{coord::*, idx::*, prelude::*, selection::*, util::char};
 use ropey::Rope;
 use std::cmp::min;
 use std::collections::BTreeSet;
@@ -35,27 +35,13 @@ fn distance_to_prev_tabstop_test() {
     }
 }
 
-fn is_char_opening_indent(ch: char) -> bool {
-    match ch {
-        '[' | '(' | '<' | '{' => true,
-        _ => false,
-    }
-}
-
-fn is_char_closing_indent(ch: char) -> bool {
-    match ch {
-        ']' | ')' | '>' | '}' => true,
-        _ => false,
-    }
-}
-
 fn is_line_prefix_increasing_ident_level(start: Idx, end: Idx, text: &Rope) -> bool {
     let mut level = 0isize;
 
-    for ch in text.slice(start.0..end.0).chars() {
-        if is_char_opening_indent(ch) {
+    for ch in start.range_to(end).slice(text).chars() {
+        if char::is_opening_indent(ch) {
             level += 1;
-        } else if is_char_closing_indent(ch) {
+        } else if char::is_closing_indent(ch) {
             level -= 1;
         }
     }
@@ -366,7 +352,7 @@ impl Buffer {
         let mut indents = self.map_each_enumerated_selection(|i, sel, text| {
             let line_begining = sel.cursor.backward_to_line_start(text);
             let indent_end = sel.cursor.before_first_non_whitespace(text);
-            let indent: Rope = text.slice(line_begining.0..indent_end.0).into();
+            let indent: Rope = line_begining.range_to(indent_end).slice(text).into();
             let insert_idx = if was_enter {
                 sel.cursor
             } else {

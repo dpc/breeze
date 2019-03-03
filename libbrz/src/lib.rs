@@ -4,6 +4,7 @@ pub mod buffer;
 pub mod coord;
 pub mod idx;
 pub mod mode;
+pub mod range;
 pub mod selection;
 
 pub mod prelude;

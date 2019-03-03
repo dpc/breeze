@@ -1,6 +1,7 @@
 use ropey::Rope;
 
 use crate::coord::*;
+use crate::range::Range;
 use crate::util::char;
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
@@ -152,6 +153,13 @@ impl Idx {
             self.0 = text.len_chars();
         }
         self
+    }
+
+    pub fn range_to(self, other: Idx) -> Range {
+        Range {
+            from: self,
+            to: other,
+        }
     }
 }
 
