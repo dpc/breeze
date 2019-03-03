@@ -35,6 +35,34 @@ fn distance_to_prev_tabstop_test() {
     }
 }
 
+fn is_char_opening_indent(ch: char) -> bool {
+    match ch {
+        '[' | '(' | '<' | '{' => true,
+        _ => false,
+    }
+}
+
+fn is_char_closing_indent(ch: char) -> bool {
+    match ch {
+        ']' | ')' | '>' | '}' => true,
+        _ => false,
+    }
+}
+
+fn is_line_prefix_increasing_ident_level(start: Idx, end: Idx, text: &Rope) -> bool {
+    let mut level = 0isize;
+
+    for ch in text.slice(start.0..end.0).chars() {
+        if is_char_opening_indent(ch) {
+            level += 1;
+        } else if is_char_closing_indent(ch) {
+            level -= 1;
+        }
+    }
+
+    level > 0
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelectionSet {
     pub primary: usize,
@@ -328,34 +356,38 @@ impl Buffer {
 
     fn open_impl(&mut self, was_enter: bool) {
         let mut indents = self.map_each_enumerated_selection(|i, sel, text| {
-            let line_begining = sel.cursor.backward_to_line_start(text).0;
-            let indent_end = sel.cursor.before_first_non_whitespace(text).0;
-            let indent: Rope = text.slice(line_begining..indent_end).into();
+            let line_begining = sel.cursor.backward_to_line_start(text);
+            let indent_end = sel.cursor.before_first_non_whitespace(text);
+            let indent: Rope = text.slice(line_begining.0..indent_end.0).into();
             let insert_idx = if was_enter {
                 sel.cursor
             } else {
                 sel.cursor.forward_to_line_end(text)
             };
-            (i, indent, insert_idx)
+            let increase_indent =
+                is_line_prefix_increasing_ident_level(line_begining, insert_idx, text);
+            (i, indent, insert_idx, increase_indent)
         });
-        indents.sort_by_key(|&(_, _, insert_idx)| insert_idx);
+        indents.sort_by_key(|&(_, _, insert_idx, _)| insert_idx);
         indents.reverse();
 
-        for (i, (_, indent, insert_idx)) in indents.iter().enumerate() {
+        self.selection.collapse();
+        for (i, (_, indent, insert_idx, increase_indent)) in indents.iter().enumerate() {
+            let mut inserted_len = 0;
             self.text.insert(insert_idx.0, &indent.to_string());
-            self.text.insert_char(insert_idx.0, '\n');
-            let sel = &mut self.selection.selections[indents[i].0];
-            sel.cursor = *insert_idx;
-            for fixing_i in 0..=i {
-                let fixing_sel = &mut self.selection.selections[indents[fixing_i].0];
-                fixing_sel.cursor = fixing_sel
-                    .cursor
-                    .forward(1 + indent.len_chars(), &self.text);
-                fixing_sel.anchor = fixing_sel
-                    .anchor
-                    .forward(1 + indent.len_chars(), &self.text);
-                *fixing_sel = fixing_sel.collapsed().sorted();
+            inserted_len += indent.len_chars();
+            if *increase_indent {
+                let indent_text = &self.indent_text(1);
+                self.text.insert(insert_idx.0, &indent_text);
+                inserted_len += indent_text.len();
             }
+            self.text.insert_char(insert_idx.0, '\n');
+            inserted_len += 1;
+
+            self.selection.fix_on_insert(*insert_idx, inserted_len);
+            let sel = &mut self.selection.selections[indents[i].0];
+            sel.cursor = insert_idx.forward(inserted_len, &self.text);
+            *sel = sel.collapsed();
         }
     }
 
@@ -717,6 +749,14 @@ impl Buffer {
         }
     }
 
+    fn indent_text(&self, times: usize) -> String {
+        if !self.expand_tabs {
+            "\t".to_owned()
+        } else {
+            " ".repeat(self.tabstop * times)
+        }
+    }
+
     pub fn decrease_indent(&mut self, times: usize) {
         let affected_lines = self.selection.to_lines(&self.text);
 
@@ -728,11 +768,7 @@ impl Buffer {
         removals.sort_by_key(|insertion| insertion.0);
         removals.reverse();
 
-        let indent_text = if !self.expand_tabs {
-            "\t".to_owned()
-        } else {
-            " ".repeat(self.tabstop * times)
-        };
+        let indent_text = self.indent_text(times);
 
         for idx in removals {
             let range_start = idx.0;
