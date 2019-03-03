@@ -312,6 +312,8 @@ impl Buffer {
     }
 
     pub fn insert_tab(&mut self) {
+        self.selection.clear_cursor_column();
+
         if self.expand_tabs {
             let mut insertions = self.map_each_selection(|sel, text| {
                 let v_col = self.to_visual(sel.cursor.to_coord(text)).column;
@@ -334,6 +336,8 @@ impl Buffer {
     }
 
     pub fn insert(&mut self, s: &str) {
+        self.selection.clear_cursor_column();
+
         let mut insertion_points = self.map_each_selection_mut(|sel, _text| sel.cursor);
         insertion_points.sort();
         insertion_points.reverse();
@@ -355,6 +359,7 @@ impl Buffer {
     }
 
     fn open_impl(&mut self, was_enter: bool) {
+        self.selection.clear_cursor_column();
         let mut indents = self.map_each_enumerated_selection(|i, sel, text| {
             let line_begining = sel.cursor.backward_to_line_start(text);
             let indent_end = sel.cursor.before_first_non_whitespace(text);
@@ -392,6 +397,7 @@ impl Buffer {
     }
 
     pub fn delete(&mut self) -> Vec<Rope> {
+        self.selection.clear_cursor_column();
         let res = self.map_each_enumerated_selection_mut(|i, sel, text| {
             let range = sel
                 .aligned(text)
@@ -466,6 +472,7 @@ impl Buffer {
     }
 
     pub fn backspace_one(&mut self) {
+        self.selection.clear_cursor_column();
         let removal_points = self.map_each_enumerated_selection_mut(|_, sel, text| {
             let sel_aligned = sel.aligned(text);
             let range = (sel_aligned.cursor.0 - 1)..sel_aligned.cursor.0;
@@ -478,6 +485,7 @@ impl Buffer {
     }
 
     pub fn backspace(&mut self) {
+        self.selection.clear_cursor_column();
         if self.expand_tabs {
             let mut removal = self.map_each_selection(|sel, text| {
                 let v_col = self.to_visual(sel.cursor.to_coord(text)).column;
