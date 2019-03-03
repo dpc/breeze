@@ -89,7 +89,7 @@ impl SelectionSet {
         let mut lines = BTreeSet::new();
         for s in &self.selections {
             let (from, to) = s.sorted_pair();
-            let to = std::cmp::max(from, to.backward(1)).to_coord(text);
+            let to = std::cmp::max(from, to.backward(text)).to_coord(text);
             let from = from.to_coord(text);
             for line in from.line..=to.line {
                 lines.insert(line);
@@ -121,17 +121,17 @@ impl SelectionSet {
         }
     }
 
-    pub fn fix_on_delete(&mut self, idx: Idx, len: usize) {
+    pub fn fix_on_delete(&mut self, idx: Idx, len: usize, text: &Rope) {
         for i in 0..self.selections.len() {
             let sel = &mut self.selections[i];
             let cursor_idx = &mut sel.cursor;
             let anchor_idx = &mut sel.anchor;
-            if idx < cursor_idx.backward(len) {
+            if idx < cursor_idx.backward_n(len, text) {
                 *cursor_idx = Idx(cursor_idx.0.saturating_sub(len));
             } else if idx < *cursor_idx {
                 *cursor_idx = Idx(cursor_idx.0.saturating_sub(cursor_idx.0 - idx.0));
             }
-            if idx < anchor_idx.backward(len) {
+            if idx < anchor_idx.backward_n(len, text) {
                 *anchor_idx = Idx(anchor_idx.0.saturating_sub(len));
             } else if idx < *anchor_idx {
                 *anchor_idx = Idx(anchor_idx.0.saturating_sub(anchor_idx.0 - idx.0));
@@ -295,7 +295,10 @@ impl Buffer {
         {
             VisualSelection::Selection
         } else if self.selection.selections.iter().any(|sel| {
-            sel.is_empty() && sel.aligned(&self.text).is_idx_inside_direction_marker(idx)
+            sel.is_empty()
+                && sel
+                    .aligned(&self.text)
+                    .is_idx_inside_direction_marker(idx, &self.text)
         }) {
             VisualSelection::DirectionMarker
         } else {
@@ -391,7 +394,7 @@ impl Buffer {
 
             self.selection.fix_on_insert(*insert_idx, inserted_len);
             let sel = &mut self.selection.selections[indents[i].0];
-            sel.cursor = insert_idx.forward(inserted_len, &self.text);
+            sel.cursor = insert_idx.forward_n(inserted_len, &self.text);
             *sel = sel.collapsed();
         }
     }
@@ -466,7 +469,8 @@ impl Buffer {
         removal_points.reverse();
 
         for range in removal_points {
-            self.selection.fix_on_delete(Idx(range.start), range.len());
+            self.selection
+                .fix_on_delete(Idx(range.start), range.len(), &self.text);
             self.text.remove(range.clone());
         }
     }
@@ -508,8 +512,9 @@ impl Buffer {
             self.selection.collapse();
             self.selection.sort();
             for (idx, n) in removal {
-                let start = idx.backward(n);
-                self.selection.fix_on_delete(start, idx.0 - start.0);
+                let start = idx.backward_n(n, &self.text);
+                self.selection
+                    .fix_on_delete(start, idx.0 - start.0, &self.text);
                 self.text.remove(start.0..idx.0);
             }
         } else {
@@ -614,12 +619,12 @@ impl Buffer {
     }
     pub fn move_cursor_backward(&mut self, n: usize) {
         self.selection.clear_cursor_column();
-        self.move_cursor(|idx, _text| idx.backward(n));
+        self.move_cursor(|idx, text| idx.backward_n(n, text));
     }
 
     pub fn move_cursor_forward(&mut self, n: usize) {
         self.selection.clear_cursor_column();
-        self.move_cursor(|idx, text| idx.forward(n, text));
+        self.move_cursor(|idx, text| idx.forward_n(n, text));
     }
 
     pub fn move_cursor_down(&mut self, n: usize) {
@@ -645,12 +650,12 @@ impl Buffer {
 
     pub fn extend_cursor_backward(&mut self, n: usize) {
         self.selection.clear_cursor_column();
-        self.extend_cursor(|idx, _text| idx.backward(n));
+        self.extend_cursor(|idx, text| idx.backward_n(n, text));
     }
 
     pub fn extend_cursor_forward(&mut self, n: usize) {
         self.selection.clear_cursor_column();
-        self.extend_cursor(|idx, text| idx.forward(n, text));
+        self.extend_cursor(|idx, text| idx.forward_n(n, text));
     }
 
     pub fn move_cursor_forward_word(&mut self) {
@@ -787,7 +792,8 @@ impl Buffer {
             }
             let existing = self.text.slice(range.clone());
             if existing == indent_text {
-                self.selection.fix_on_delete(idx, indent_text.len());
+                self.selection
+                    .fix_on_delete(idx, indent_text.len(), &self.text);
                 self.text.remove(range);
             }
         }

@@ -7,6 +7,7 @@ pub mod mode;
 pub mod selection;
 
 pub mod prelude;
+pub mod util;
 
 use crate::buffer::Buffer;
 use crate::mode::Mode;

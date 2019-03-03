@@ -109,8 +109,8 @@ impl Selection {
         self
     }
     pub fn aligned(mut self, text: &Rope) -> Self {
-        self.anchor = self.anchor.aligned(text);
-        self.cursor = self.cursor.aligned(text);
+        self.anchor = self.anchor.trim_to_text(text);
+        self.cursor = self.cursor.trim_to_text(text);
         self
     }
 
@@ -127,9 +127,9 @@ impl Selection {
         }
     }
 
-    pub fn is_idx_inside_direction_marker(self, idx: Idx) -> bool {
+    pub fn is_idx_inside_direction_marker(self, idx: Idx, text: &Rope) -> bool {
         if self.is_forward() {
-            self.cursor == idx.saturating_add(1)
+            self.cursor == idx.forward_n(1, text)
         } else {
             self.cursor == idx
         }
@@ -138,9 +138,9 @@ impl Selection {
     pub fn self_or_direction_marker(mut self, text: &Rope) -> Self {
         if self.anchor == self.cursor {
             if self.was_forward {
-                self.cursor = self.cursor.saturating_sub(1);
+                self.cursor = self.cursor.backward(text);
             } else {
-                self.cursor = self.cursor.saturating_add(1);
+                self.cursor = self.cursor.forward(text);
             }
             self.aligned(text)
         } else {

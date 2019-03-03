@@ -154,7 +154,7 @@ impl Mode {
             Key::Char('i') => {
                 state
                     .buffer
-                    .move_cursor_coord(|coord, text| coord.after_leading_whitespace(text));
+                    .move_cursor(|idx, text| idx.before_first_non_whitespace(text));
             }
             _ => {}
         }

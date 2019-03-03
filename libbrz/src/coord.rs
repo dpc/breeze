@@ -89,7 +89,7 @@ impl Coord {
     }
 
     pub fn forward(self, n: usize, text: &Rope) -> Self {
-        Self::from_idx(self.to_idx(text).forward(n, text), text)
+        Self::from_idx(self.to_idx(text).forward_n(n, text), text)
     }
 
     pub fn forward_to_line_end(self, text: &Rope) -> Self {
@@ -105,7 +105,7 @@ impl Coord {
     }
 
     pub fn backward(self, n: usize, text: &Rope) -> Self {
-        self.map_as_idx(text, |idx| idx.backward(n))
+        self.map_as_idx(text, |idx| idx.backward_n(n, text))
     }
 
     pub fn forward_word(self, text: &Rope) -> (Self, Self) {
@@ -114,18 +114,5 @@ impl Coord {
 
     pub fn backward_word(self, text: &Rope) -> (Self, Self) {
         self.map_as_idx_2(text, |idx| idx.backward_word(text))
-    }
-
-    pub fn after_leading_whitespace(self, text: &Rope) -> Self {
-        let line = text.line(self.line);
-        if let Some((i, _)) = line
-            .chars()
-            .enumerate()
-            .find(|(_i, ch)| !ch.is_whitespace() && crate::idx::char_is_not_newline(*ch))
-        {
-            self.set_column(i, text)
-        } else {
-            self.set_column(line.len_chars(), text)
-        }
     }
 }

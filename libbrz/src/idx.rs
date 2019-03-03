@@ -1,10 +1,7 @@
 use ropey::Rope;
 
 use crate::coord::*;
-
-fn char_is_word(ch: char) -> bool {
-    ch.is_alphanumeric() || ch == '_'
-}
+use crate::util::char;
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum CharCategory {
@@ -15,7 +12,7 @@ enum CharCategory {
 
 fn char_category(ch: char) -> CharCategory {
     use self::CharCategory::*;
-    if char_is_word(ch) {
+    if char::is_word_forming(ch) {
         Alphanumeric
     } else if ch.is_whitespace() {
         Whitespace
@@ -24,53 +21,37 @@ fn char_category(ch: char) -> CharCategory {
     }
 }
 
-fn char_is_newline(ch: char) -> bool {
-    ch == '\n'
-}
-
-pub fn char_is_not_newline(ch: char) -> bool {
-    ch != '\n'
-}
-
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Idx(pub usize);
 
 impl Idx {
-    pub fn backward(self, n: usize) -> Self {
+    pub fn begining(_: &Rope) -> Idx {
+        Idx(0)
+    }
+    pub fn end(text: &Rope) -> Idx {
+        Idx(text.len_chars())
+    }
+
+    pub fn backward(self, text: &Rope) -> Self {
+        self.backward_n(1, text)
+    }
+
+    pub fn backward_n(self, n: usize, _text: &Rope) -> Self {
         Idx(self.0.saturating_sub(n))
     }
-    pub fn forward(self, n: usize, text: &Rope) -> Self {
+
+    pub fn forward_n(self, n: usize, text: &Rope) -> Self {
         Idx(std::cmp::min(self.0.saturating_add(n), text.len_chars()))
     }
 
+    pub fn forward(self, text: &Rope) -> Self {
+        self.forward_n(1, text)
+    }
     pub fn to_coord(self, text: &Rope) -> Coord {
         Coord::from_idx(self, text)
     }
 
-    pub fn backward_word(self, text: &Rope) -> (Idx, Idx) {
-        let mut cur = self;
-
-        while cur
-            .leftside_char(text)
-            .map(char::is_whitespace)
-            .unwrap_or(false)
-        {
-            cur -= 1;
-        }
-
-        let start = cur;
-        let start_ch_category = start.leftside_char(text).map(char_category);
-
-        while cur.leftside_char(text).map(char_category) == start_ch_category
-            && start_ch_category.is_some()
-        {
-            cur -= 1;
-        }
-
-        (start, cur)
-    }
-
-    pub fn leftside_char(self, text: &Rope) -> Option<char> {
+    pub fn prev_char(self, text: &Rope) -> Option<char> {
         if self.0 == 0 {
             None
         } else {
@@ -78,7 +59,7 @@ impl Idx {
         }
     }
 
-    pub fn rightside_char(self, text: &Rope) -> Option<char> {
+    pub fn next_char(self, text: &Rope) -> Option<char> {
         if self.0 >= text.len_chars() {
             None
         } else {
@@ -86,61 +67,61 @@ impl Idx {
         }
     }
 
-    pub fn forward_word(self, text: &Rope) -> (Idx, Idx) {
+    pub fn backward_word(self, text: &Rope) -> (Idx, Idx) {
         let mut cur = self;
 
-        while cur.rightside_char(text) == Some('\n') {
-            cur += 1;
-        }
+        cur = cur.backward_while(char::is_newline, text);
+        cur = cur.backward_while(char::is_non_newline_whitespace, text);
 
         let start = cur;
-        let start_ch_category = start.rightside_char(text).map(char_category);
-
-        while cur.rightside_char(text).map(char_category) == start_ch_category
-            && start_ch_category.is_some()
-        {
-            cur += 1;
+        if let Some(start_ch_category) = start.prev_char(text).map(char_category) {
+            cur = cur.backward_while(|ch| char_category(ch) == start_ch_category, text);
         }
 
-        while cur
-            .rightside_char(text)
-            .map(|ch| ch.is_whitespace() && ch != '\n')
-            .unwrap_or(false)
-        {
-            cur += 1;
-        }
         (start, cur)
     }
 
-    pub fn forward_to_line_end(self, text: &Rope) -> Idx {
+    pub fn forward_word(self, text: &Rope) -> (Idx, Idx) {
         let mut cur = self;
 
-        while cur
-            .rightside_char(text)
-            .map(char_is_not_newline)
-            .unwrap_or(false)
-        {
-            cur += 1;
+        cur = cur.forward_while(char::is_newline, text);
+
+        let start = cur;
+        if let Some(start_ch_category) = start.next_char(text).map(char_category) {
+            cur = cur.forward_while(|ch| char_category(ch) == start_ch_category, text);
         }
 
+        cur = cur.forward_while(char::is_non_newline_whitespace, text);
+
+        (start, cur)
+    }
+
+    pub fn backward_while(self, mut f: impl FnMut(char) -> bool, text: &Rope) -> Self {
+        let mut cur = self;
+        while cur.prev_char(text).map(&mut f).unwrap_or(false) {
+            cur = cur.backward(text);
+        }
         cur
+    }
+
+    pub fn forward_while(self, mut f: impl FnMut(char) -> bool, text: &Rope) -> Self {
+        let mut cur = self;
+        while cur.next_char(text).map(&mut f).unwrap_or(false) {
+            cur = cur.forward(text);
+        }
+        cur
+    }
+
+    pub fn forward_to_line_end(self, text: &Rope) -> Idx {
+        self.forward_while(char::is_not_newline, text)
     }
 
     pub fn forward_past_line_end(self, text: &Rope) -> Idx {
-        self.forward_to_line_end(text).forward(1, text)
+        self.forward_to_line_end(text).forward(text)
     }
 
     pub fn backward_to_line_start(self, text: &Rope) -> Idx {
-        let mut cur = self;
-
-        while cur
-            .leftside_char(text)
-            .map(|ch| ch != '\n')
-            .unwrap_or(false)
-        {
-            cur -= 1;
-        }
-        cur
+        self.backward_while(|ch| ch != '\n', text)
     }
 
     pub fn down_unaligned(self, n: usize, column: Option<usize>, text: &Rope) -> Self {
@@ -162,20 +143,11 @@ impl Idx {
     }
 
     pub fn before_first_non_whitespace(self, text: &Rope) -> Self {
-        self.to_coord(text)
-            .after_leading_whitespace(text)
-            .to_idx(text)
+        self.backward_to_line_start(text)
+            .forward_while(char::is_non_newline_whitespace, text)
     }
 
-    pub fn saturating_add(self, n: usize) -> Self {
-        Idx(self.0.saturating_add(n))
-    }
-
-    pub fn saturating_sub(self, n: usize) -> Self {
-        Idx(self.0.saturating_sub(n))
-    }
-
-    pub fn aligned(mut self, text: &Rope) -> Self {
+    pub fn trim_to_text(mut self, text: &Rope) -> Self {
         if self.0 > text.len_chars() {
             self.0 = text.len_chars();
         }
