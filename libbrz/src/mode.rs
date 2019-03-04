@@ -1,6 +1,6 @@
 use crate::idx::*;
+use crate::state::State;
 use crate::Key;
-use crate::State;
 use default::default;
 use std::cmp;
 
@@ -62,13 +62,12 @@ impl Mode {
         match key {
             Key::Esc => {
                 state.cmd = "".into();
-                state.mode = default();
+                state.set_mode(default());
             }
             Key::Char('\n') => {
-                eprintln!("cmd: {}", state.cmd);
                 self.handle_command(&mut state);
                 state.cmd = "".into();
-                state.mode = default();
+                state.set_mode(default());
             }
             Key::Char(ch) => {
                 state.cmd.push(ch);
@@ -90,32 +89,32 @@ impl Mode {
     fn handle_insert(&self, mut state: State, key: Key) -> State {
         match key {
             Key::Esc => {
-                state.mode = default();
+                state.set_mode(default());
             }
             Key::Char('\n') => {
-                state.buffer.insert_enter();
+                state.cur_buffer_mut().insert_enter();
             }
             Key::Char('\t') => {
-                state.buffer.insert_tab();
+                state.cur_buffer_mut().insert_tab();
             }
             Key::Backspace => {
-                state.buffer.backspace();
+                state.cur_buffer_mut().backspace();
             }
             Key::Left => {
-                state.buffer.move_cursor_backward(1);
+                state.cur_buffer_mut().move_cursor_backward(1);
             }
             Key::Right => {
-                state.buffer.move_cursor_forward(1);
+                state.cur_buffer_mut().move_cursor_forward(1);
             }
             Key::Up => {
-                state.buffer.move_cursor_up(1);
+                state.cur_buffer_mut().move_cursor_up(1);
             }
             Key::Down => {
-                state.buffer.move_cursor_down(1);
+                state.cur_buffer_mut().move_cursor_down(1);
             }
             Key::Char(ch) => {
                 if !ch.is_control() {
-                    state.buffer.insert_char(ch);
+                    state.cur_buffer_mut().insert_char(ch);
                 }
             }
             _ => {}
@@ -124,27 +123,27 @@ impl Mode {
     }
 
     fn handle_goto(&self, mut state: State, key: Key) -> State {
-        state.mode = default();
+        state.set_mode(default());
         match key {
             Key::Esc => {}
             Key::Char('l') => {
-                state.buffer.move_cursor_coord(|coord, text| {
+                state.cur_buffer_mut().move_cursor_coord(|coord, text| {
                     let line = text.line(coord.line);
                     coord.set_column(line.len_chars() - 1, text)
                 });
             }
             Key::Char('h') => {
                 state
-                    .buffer
+                    .cur_buffer_mut()
                     .move_cursor_coord(|coord, text| coord.set_column(0, text));
             }
             Key::Char('k') => {
-                state.buffer.move_cursor_coord(|coord, text| {
+                state.cur_buffer_mut().move_cursor_coord(|coord, text| {
                     coord.set_line(0, text).trim_column_to_buf(text).into()
                 });
             }
             Key::Char('j') => {
-                state.buffer.move_cursor_coord(|coord, text| {
+                state.cur_buffer_mut().move_cursor_coord(|coord, text| {
                     coord
                         .set_line(text.len_lines().saturating_sub(1), text)
                         .trim_column_to_buf(text)
@@ -153,7 +152,7 @@ impl Mode {
             }
             Key::Char('i') => {
                 state
-                    .buffer
+                    .cur_buffer_mut()
                     .move_cursor(|idx, text| idx.before_first_non_whitespace(text));
             }
             _ => {}
@@ -166,19 +165,19 @@ impl Normal {
     fn handle(&self, mut state: State, key: Key) -> State {
         match key {
             Key::Char(n @ '0'..='9') => {
-                state.mode = Mode::Normal(Normal {
+                state.set_mode(Mode::Normal(Normal {
                     num_prefix: Some(
                         self.num_prefix
                             .unwrap_or(0)
                             .saturating_mul(10)
                             .saturating_add(n as usize - '0' as usize),
                     ),
-                });
+                }));
                 state
             }
             other => {
                 let mut state = self.handle_not_digit(state, other);
-                if let Mode::Normal(ref mut normal) = state.mode {
+                if let &mut Mode::Normal(ref mut normal) = state.get_mode() {
                     normal.num_prefix = None;
                 }
                 state
@@ -191,32 +190,45 @@ impl Normal {
 
         match key {
             Key::Char('u') => {
-                if let Some(buffer_history_undo_i) = state.buffer_history_undo_i.as_mut() {
+                if let Some(buffer_history_undo_i) =
+                    state.cur_buffer_state_mut().buffer_history_undo_i.as_mut()
+                {
                     let history_i = buffer_history_undo_i.saturating_sub(1);
                     *buffer_history_undo_i = history_i;
-                    state.buffer = state.buffer_history[history_i].clone();
-                } else if !state.buffer_history.is_empty() {
-                    let history_i = state.buffer_history.len().saturating_sub(1);
-                    state.buffer_history_undo_i = Some(history_i);
-                    state.buffer = state.buffer_history[history_i].clone();
+                    state.cur_buffer_state_mut().buffer =
+                        state.cur_buffer_state().buffer_history[history_i].clone();
+                } else if !state.cur_buffer_state().buffer_history.is_empty() {
+                    let history_i = state
+                        .cur_buffer_state()
+                        .buffer_history
+                        .len()
+                        .saturating_sub(1);
+                    state.cur_buffer_state_mut().buffer_history_undo_i = Some(history_i);
+                    state.cur_buffer_state_mut().buffer =
+                        state.cur_buffer_state().buffer_history[history_i].clone();
                 }
                 state
             }
             Key::Char('U') => {
-                if let Some(buffer_history_undo_i) = state.buffer_history_undo_i.as_mut() {
+                let buffer_state = state.cur_buffer_state_mut();
+                if let Some(buffer_history_undo_i) = buffer_state.buffer_history_undo_i.as_mut() {
                     let history_i = cmp::min(
                         buffer_history_undo_i.saturating_add(times),
-                        state.buffer_history.len() - 1,
+                        buffer_state.buffer_history.len() - 1,
                     );
                     *buffer_history_undo_i = history_i;
-                    state.buffer = state.buffer_history[history_i].clone();
+                    buffer_state.buffer = buffer_state.buffer_history[history_i].clone();
                 }
                 state
             }
             other => {
-                let prev_buf = state.buffer.clone();
-                self.handle_not_digit_not_undo(state, other)
-                    .maybe_commit_undo_point(&prev_buf)
+                let prev_buf = state.cur_buffer().clone();
+                let mut state = self.handle_not_digit_not_undo(state.clone(), other);
+
+                state
+                    .cur_buffer_state_mut()
+                    .maybe_commit_undo_point(&prev_buf);
+                state
             }
         }
     }
@@ -225,125 +237,127 @@ impl Normal {
         let times = self.num_prefix.unwrap_or(1);
         match key {
             Key::Esc => {
-                state.mode = Mode::default();
+                state.set_mode(Mode::default());
             }
             Key::Char(' ') => {
-                state.buffer.collapse();
+                state.cur_buffer_mut().collapse();
             }
             Key::Char(':') => {
-                state.mode = Mode::Command;
+                state.set_mode(Mode::Command);
             }
             Key::Char('g') => {
                 if let Some(num_prefix) = self.num_prefix {
-                    state.buffer.move_cursor_coord(|coord, text| {
+                    state.cur_buffer_mut().move_cursor_coord(|coord, text| {
                         coord.set_line(num_prefix.saturating_sub(1), text)
                     });
-                    state.mode = Mode::default();
+                    state.set_mode(Mode::default());
                 } else {
-                    state.mode = Mode::Goto
+                    state.set_mode(Mode::Goto)
                 }
             }
             Key::Left => {
-                state.buffer.move_cursor_backward(times);
+                state.cur_buffer_mut().move_cursor_backward(times);
             }
             Key::Right => {
-                state.buffer.move_cursor_forward(times);
+                state.cur_buffer_mut().move_cursor_forward(times);
             }
             Key::Up => {
-                state.buffer.move_cursor_up(times);
+                state.cur_buffer_mut().move_cursor_up(times);
             }
             Key::Down => {
-                state.buffer.move_cursor_down(times);
+                state.cur_buffer_mut().move_cursor_down(times);
             }
             Key::Char('i') => {
-                state.mode = Mode::Insert;
-                state = state.commit_undo_point()
+                state.set_mode(Mode::Insert);
+                state.cur_buffer_state_mut().commit_undo_point();
             }
             Key::Char('h') => {
-                state.buffer.move_cursor_backward(times);
+                state.cur_buffer_mut().move_cursor_backward(times);
             }
             Key::Char('H') => {
-                state.buffer.extend_cursor_backward(times);
+                state.cur_buffer_mut().extend_cursor_backward(times);
             }
             Key::Char('l') => {
-                state.buffer.move_cursor_forward(times);
+                state.cur_buffer_mut().move_cursor_forward(times);
             }
             Key::Char('L') => {
-                state.buffer.extend_cursor_forward(times);
+                state.cur_buffer_mut().extend_cursor_forward(times);
             }
             Key::Char('j') => {
-                state.buffer.move_cursor_down(times);
+                state.cur_buffer_mut().move_cursor_down(times);
             }
             Key::Char('J') => {
-                state.buffer.extend_cursor_down(times);
+                state.cur_buffer_mut().extend_cursor_down(times);
             }
             Key::Char('k') => {
-                state.buffer.move_cursor_up(times);
+                state.cur_buffer_mut().move_cursor_up(times);
             }
             Key::Char('K') => {
-                state.buffer.extend_cursor_up(times);
+                state.cur_buffer_mut().extend_cursor_up(times);
             }
             Key::Char('d') => {
-                state.yanked = state.buffer.delete();
+                state.yanked = state.cur_buffer_mut().delete();
             }
             Key::Char('c') => {
-                state.yanked = state.buffer.delete();
-                state.mode = self::Mode::Insert;
+                state.yanked = state.cur_buffer_mut().delete();
+                state.set_mode(self::Mode::Insert);
             }
             Key::Char('o') => {
-                state.buffer.open();
-                state.mode = self::Mode::Insert;
+                state.cur_buffer_mut().open();
+                state.set_mode(self::Mode::Insert);
             }
             Key::Char('y') => {
-                state.yanked = state.buffer.yank();
+                state.yanked = state.cur_buffer_mut().yank();
             }
             Key::Char('p') => {
-                state.buffer.paste(&state.yanked);
+                let yanked = state.yanked.clone();
+                state.cur_buffer_mut().paste(&yanked);
             }
             Key::Char('P') => {
-                state.buffer.paste_extend(&state.yanked);
+                let yanked = state.yanked.clone();
+                state.cur_buffer_mut().paste_extend(&yanked);
             }
             Key::Char('w') => {
-                state.buffer.move_cursor_2(Idx::forward_word);
+                state.cur_buffer_mut().move_cursor_2(Idx::forward_word);
             }
             Key::Char('W') => {
-                state.buffer.extend_cursor_2(Idx::forward_word);
+                state.cur_buffer_mut().extend_cursor_2(Idx::forward_word);
             }
             Key::Char('b') => {
-                state.buffer.move_cursor_2(Idx::backward_word);
+                state.cur_buffer_mut().move_cursor_2(Idx::backward_word);
             }
             Key::Char('B') => {
-                state.buffer.extend_cursor_2(Idx::backward_word);
+                state.cur_buffer_mut().extend_cursor_2(Idx::backward_word);
             }
             Key::Char('x') => {
-                state.buffer.move_line();
+                state.cur_buffer_mut().move_line();
             }
             Key::Char('X') => {
-                state.buffer.extend_line();
+                state.cur_buffer_mut().extend_line();
             }
             Key::Char('%') => {
-                state.buffer.select_all();
+                state.cur_buffer_mut().select_all();
             }
             Key::Char('\'') | Key::Alt(';') => {
-                state.buffer.reverse_selections();
+                state.cur_buffer_mut().reverse_selections();
             }
             Key::Ctrl('d') => {
-                state.buffer.move_cursor_down(25);
+                state.cur_buffer_mut().move_cursor_down(25);
             }
             Key::Ctrl('D') => {
-                state.buffer.extend_cursor_down(25);
+                state.cur_buffer_mut().extend_cursor_down(25);
             }
             Key::Ctrl('u') => {
-                state.buffer.move_cursor_up(25);
+                state.cur_buffer_mut().move_cursor_up(25);
             }
             Key::Ctrl('U') => {
-                state.buffer.extend_cursor_up(25);
+                state.cur_buffer_mut().extend_cursor_up(25);
             }
             Key::Char('>') => {
-                state.buffer.increase_indent(times);
+                state.cur_buffer_mut().increase_indent(times);
             }
             Key::Char('<') => {
-                state.buffer.decrease_indent(times);
+                state.cur_buffer_mut().decrease_indent(times);
             }
             _ => {}
         }

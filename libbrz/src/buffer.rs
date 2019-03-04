@@ -3,6 +3,7 @@ use crate::{coord::*, idx::*, prelude::*, selection::*, util::char};
 use ropey::Rope;
 use std::cmp::min;
 use std::collections::BTreeSet;
+use std::path::PathBuf;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum VisualSelection {
@@ -161,6 +162,9 @@ impl SelectionSet {
 pub struct Buffer {
     pub text: ropey::Rope,
     pub selection: SelectionSet,
+
+    pub path: Option<PathBuf>,
+
     pub tabstop: usize,
     pub expand_tabs: bool,
 }
@@ -172,6 +176,7 @@ impl Default for Buffer {
             tabstop: 4,
             selection: default(),
             expand_tabs: true,
+            path: None,
         }
     }
 }

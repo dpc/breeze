@@ -11,10 +11,11 @@ use termion::screen::*;
 use termion::style;
 
 use ropey::Rope;
+use std;
 
 mod opts;
 
-use libbrz::{buffer::*, coord::*, idx::Idx, prelude::*, State};
+use libbrz::{buffer::*, coord::*, idx::Idx, prelude::*, state::State};
 
 fn termion_to_brz_key(key: termion::event::Key) -> libbrz::Key {
     match key {
@@ -123,9 +124,20 @@ struct Breeze {
 impl Breeze {
     fn init() -> Result<Self> {
         let screen = AlternateScreen::from(std::io::stdout().into_raw_mode().unwrap());
+        let mut state: State = default();
+
+        state.register_read_handler(|path| {
+            Rope::from_reader(std::io::BufReader::new(std::fs::File::open(path)?))
+        });
+        state.register_write_handler(|path, rope| {
+            let tmp_path = path.with_extension("brz.tmp");
+            rope.write_to(std::io::BufWriter::new(std::fs::File::create(&tmp_path)?))?;
+            std::fs::rename(tmp_path, path)?;
+            Ok(())
+        });
 
         let mut breeze = Breeze {
-            state: default(),
+            state,
             display_cols: 0,
             screen,
             display_rows: 0,
@@ -146,8 +158,7 @@ impl Breeze {
     }
 
     fn open(&mut self, path: &Path) -> Result<()> {
-        let text = Rope::from_reader(std::io::BufReader::new(std::fs::File::open(path)?))?;
-        self.state.open_buffer(Buffer::from_text(text));
+        self.state.open_buffer(path.to_owned());
 
         Ok(())
     }
@@ -193,7 +204,7 @@ impl Breeze {
 
         write!(&mut buf, "{}{}", style::Reset, termion::clear::All).unwrap();
         let window_height = self.display_rows - 1;
-        let cursor_pos = self.state.buffer().cursor_pos();
+        let cursor_pos = self.state.cur_buffer().cursor_pos();
         let max_start_line = cursor_pos.line.saturating_sub(self.window_margin);
         let min_start_line = cursor_pos
             .line
@@ -211,7 +222,7 @@ impl Breeze {
         let start_line = min(
             self.prev_start_line,
             self.state
-                .buffer()
+                .cur_buffer()
                 .text
                 .len_lines()
                 .saturating_sub(window_height),
@@ -222,15 +233,15 @@ impl Breeze {
             line: start_line,
             column: 0,
         }
-        .to_idx(&self.state.buffer().text)
+        .to_idx(&self.state.cur_buffer().text)
         .0;
 
         for (visual_line_i, line_i) in (start_line..end_line).enumerate() {
-            if line_i >= self.state.buffer().text.len_lines() {
+            if line_i >= self.state.cur_buffer().text.len_lines() {
                 break;
             }
 
-            let line = self.state.buffer().text.line(line_i);
+            let line = self.state.cur_buffer().text.line(line_i);
 
             write!(
                 &mut buf,
@@ -242,7 +253,10 @@ impl Breeze {
             let mut visual_column = 0;
 
             for (char_i, ch) in line.chars().enumerate().take(self.display_cols) {
-                let visual_selection = self.state.buffer().idx_selection_type(Idx(ch_idx + char_i));
+                let visual_selection = self
+                    .state
+                    .cur_buffer()
+                    .idx_selection_type(Idx(ch_idx + char_i));
                 let (ch, n) = match ch {
                     '\n' => {
                         if visual_selection != VisualSelection::None {
@@ -304,7 +318,7 @@ impl Breeze {
         )
         .unwrap();
 
-        let cursor_visual = self.state.buffer().to_visual(cursor_pos);
+        let cursor_visual = self.state.cur_buffer().to_visual(cursor_pos);
         // cursor
         write!(
             &mut buf,
