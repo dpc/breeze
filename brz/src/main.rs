@@ -338,7 +338,7 @@ fn main() -> Result<()> {
     let opt = opts::Opts::from_args();
     let mut brz = Breeze::init()?;
 
-    if let Some(path) = opt.input {
+    for path in opt.inputs {
         brz.open(&path)?;
     }
 

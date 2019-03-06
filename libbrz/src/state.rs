@@ -103,6 +103,60 @@ impl State {
         });
     }
 
+    pub fn write_buffer(&mut self, path: Option<PathBuf>) {
+        if let Some(path) = path.or_else(|| self.cur_buffer_state().path.clone()) {
+            match self.try_write_buffer(&path) {
+                Ok(()) => {
+                    self.cur_buffer_state_mut().path = Some(path);
+                }
+                Err(e) => {
+                    self.msg = Some(format!("{}", e));
+                }
+            }
+        } else {
+            self.msg = Some(format!("No path given"));
+        }
+    }
+
+    fn try_write_buffer(&self, path: &Path) -> io::Result<()> {
+        (self.write_handler)(path, &self.buffers[self.cur_buffer_i].buffer.text)
+    }
+
+    pub fn open_scratch_buffer(&mut self) {
+        self.buffers.insert(default());
+    }
+
+    pub fn delete_buffer(&mut self) {
+        self.buffers.remove(self.cur_buffer_i);
+        if self.buffers.is_empty() {
+            self.open_scratch_buffer();
+        }
+        self.buffer_next()
+    }
+
+    pub fn buffer_next(&mut self) {
+        loop {
+            self.cur_buffer_i += 1;
+            self.cur_buffer_i %= self.buffers.capacity();
+            if self.buffers.contains(self.cur_buffer_i) {
+                break;
+            }
+        }
+    }
+
+    pub fn buffer_prev(&mut self) {
+        loop {
+            if self.cur_buffer_i == 0 {
+                self.cur_buffer_i = self.buffers.capacity() - 1;
+            } else {
+                self.cur_buffer_i -= 1;
+            }
+            if self.buffers.contains(self.cur_buffer_i) {
+                break;
+            }
+        }
+    }
+
     pub fn is_finished(&self) -> bool {
         self.quit
     }
@@ -156,17 +210,14 @@ impl Default for BufferState {
 }
 impl Default for State {
     fn default() -> Self {
-        let mut buffers = Slab::new();
-        buffers.insert(default());
-
-        State {
+        let mut s = State {
             quit: false,
             mode: Mode::default(),
             yanked: vec![],
             cmd: "".into(),
             msg: None,
 
-            buffers,
+            buffers: Slab::new(),
             cur_buffer_i: 0,
 
             read_handler: Arc::new(|_path| {
@@ -181,6 +232,11 @@ impl Default for State {
                     "handler not registered",
                 ))
             }),
-        }
+        };
+
+        s.open_scratch_buffer();
+        s.buffer_next();
+
+        s
     }
 }

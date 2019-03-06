@@ -7,5 +7,5 @@ use std::path::PathBuf;
 pub struct Opts {
     //Input files or directories.
     #[structopt(parse(from_os_str))]
-    pub input: Option<PathBuf>,
+    pub inputs: Vec<PathBuf>,
 }

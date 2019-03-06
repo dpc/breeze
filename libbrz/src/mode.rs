@@ -3,6 +3,7 @@ use crate::state::State;
 use crate::Key;
 use default::default;
 use std::cmp;
+use std::path::PathBuf;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Normal {
@@ -78,9 +79,31 @@ impl Mode {
     }
 
     fn handle_command(&self, state: &mut State) {
-        match state.cmd.as_str() {
+        let cmd: Vec<_> = state.cmd.split_whitespace().map(str::to_owned).collect();
+        if cmd.len() < 1 {
+            return;
+        }
+
+        match cmd[0].as_str() {
             "q" => {
                 state.quit = true;
+            }
+            "bn" => {
+                state.buffer_next();
+            }
+            "bp" => {
+                state.buffer_prev();
+            }
+            "e" => {
+                for s in &cmd[1..] {
+                    state.open_buffer(PathBuf::from(s))
+                }
+            }
+            "db" => {
+                state.delete_buffer();
+            }
+            "w" => {
+                state.write_buffer(cmd.get(1).map(PathBuf::from));
             }
             _ => state.msg = Some(format!("unrecognized command: {}", state.cmd)),
         }
