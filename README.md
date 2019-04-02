@@ -88,13 +88,7 @@ You know... just like in Vim or Kakoune.
 Breeze has selections. Kind of like in Visual mode in Vim, just more automatic. If you've used Kakoune - they
 are very much like in Kakoune.
 
-In normal mode:
-
-
-Shift + key typically extends the selection, instead of changing it.
-
-
-Other actions that should work already:
+What should work already:
 
 * basic moves: `hjklwb%`
 * numerical prefix for most of implemented stuff
@@ -102,7 +96,9 @@ Other actions that should work already:
 * deletion: `d`, `c`
 * copy&paste `y`, `p`, `P`
 * `g` (followed by `h`, `j`, `k`, `l`)
+* Ctrl-P (!!!)
 * `'` - switch selection direction
 * `<` and `>`
 * line selection: `x`, `X`
 * undo: `u` `U`
+* basic commands: `:q`, `:e`, `:bn`, `:bp`, `:w`
