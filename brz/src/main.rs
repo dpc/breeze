@@ -129,6 +129,7 @@ impl Breeze {
         state.register_read_handler(|path| {
             Rope::from_reader(std::io::BufReader::new(std::fs::File::open(path)?))
         });
+
         state.register_write_handler(|path, rope| {
             let tmp_path = path.with_extension("brz.tmp");
             rope.write_to(std::io::BufWriter::new(std::fs::File::create(&tmp_path)?))?;
@@ -136,6 +137,33 @@ impl Breeze {
             Ok(())
         });
 
+        state.register_find_handler(|pattern| {
+            Ok(ignore::Walk::new(".")
+                .into_iter()
+                .filter_map(|entry| entry.ok())
+                .filter(|entry| {
+                    let entry_str = entry
+                        .path()
+                        .to_owned()
+                        .into_os_string()
+                        .to_string_lossy()
+                        .to_string();
+                    let mut entry_str = &entry_str[..];
+
+                    for ch in pattern.chars() {
+                        if let Some(i) = entry_str.find(ch) {
+                            eprintln!("{} {} {}", entry_str, ch, i);
+                            entry_str = &entry_str[i + 1..];
+                        } else {
+                            return false;
+                        }
+                    }
+                    return true;
+                })
+                .map(|entry| entry.into_path())
+                .take(10)
+                .collect())
+        });
         let mut breeze = Breeze {
             state,
             display_cols: 0,

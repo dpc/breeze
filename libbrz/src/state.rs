@@ -42,10 +42,12 @@ pub struct State {
     pub(crate) yanked: Vec<Rope>,
 
     pub(crate) cmd: String,
+    pub(crate) find_result: Option<PathBuf>,
     pub(crate) msg: Option<String>,
 
     pub(crate) read_handler: Arc<Fn(&Path) -> io::Result<Rope>>,
     pub(crate) write_handler: Arc<Fn(&Path, &Rope) -> io::Result<()>>,
+    pub(crate) find_handler: Arc<Fn(&str) -> io::Result<Vec<PathBuf>>>,
 
     buffers: Slab<BufferState>,
     cur_buffer_i: usize,
@@ -55,6 +57,15 @@ impl State {
     pub fn cmd_string(&self) -> Option<String> {
         if let Some(ref msg) = self.msg {
             Some(msg.to_owned())
+        } else if let Mode::Find = self.mode {
+            Some(format!(
+                "Find: {} {}",
+                self.cmd,
+                self.find_result
+                    .clone()
+                    .unwrap_or_else(|| PathBuf::new())
+                    .display()
+            ))
         } else if let Mode::Command = self.mode {
             Some(format!(":{}", self.cmd))
         } else {
@@ -196,6 +207,13 @@ impl State {
     pub fn register_write_handler(&mut self, f: impl Fn(&Path, &Rope) -> io::Result<()> + 'static) {
         self.write_handler = Arc::new(f);
     }
+
+    pub fn register_find_handler(
+        &mut self,
+        f: impl Fn(&str) -> io::Result<Vec<PathBuf>> + 'static,
+    ) {
+        self.find_handler = Arc::new(f);
+    }
 }
 
 impl Default for BufferState {
@@ -215,6 +233,7 @@ impl Default for State {
             mode: Mode::default(),
             yanked: vec![],
             cmd: "".into(),
+            find_result: None,
             msg: None,
 
             buffers: Slab::new(),
@@ -227,6 +246,12 @@ impl Default for State {
                 ))
             }),
             write_handler: Arc::new(|_path, _rope| {
+                Err(io::Error::new(
+                    io::ErrorKind::NotConnected,
+                    "handler not registered",
+                ))
+            }),
+            find_handler: Arc::new(|_str| {
                 Err(io::Error::new(
                     io::ErrorKind::NotConnected,
                     "handler not registered",

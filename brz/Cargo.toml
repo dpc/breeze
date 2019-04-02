@@ -13,3 +13,4 @@ termion = "*"
 default = "*"
 structopt = "*"
 libbrz = { path = "../libbrz/" }
+ignore = "0.4"

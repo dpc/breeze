@@ -16,6 +16,7 @@ pub enum Mode {
     Insert,
     Goto,
     Command,
+    Find,
 }
 
 impl Default for Mode {
@@ -32,6 +33,7 @@ impl Mode {
             Insert => "insert",
             Goto => "goto",
             Command => "command",
+            Find => "find",
         }
     }
 
@@ -56,6 +58,7 @@ impl Mode {
             Insert => self.handle_insert(state, key),
             Command => self.handle_command_key(state, key),
             Goto => self.handle_goto(state, key),
+            Find => self.handle_find_key(state, key),
         }
     }
 
@@ -66,19 +69,22 @@ impl Mode {
                 state.set_mode(default());
             }
             Key::Char('\n') => {
-                self.handle_command(&mut state);
+                self.handle_command_complete(&mut state);
                 state.cmd = "".into();
                 state.set_mode(default());
             }
             Key::Char(ch) => {
                 state.cmd.push(ch);
             }
+            Key::Backspace => {
+                state.cmd.pop();
+            }
             _ => {}
         }
         state
     }
 
-    fn handle_command(&self, state: &mut State) {
+    fn handle_command_complete(&self, state: &mut State) {
         let cmd: Vec<_> = state.cmd.split_whitespace().map(str::to_owned).collect();
         if cmd.len() < 1 {
             return;
@@ -182,6 +188,33 @@ impl Mode {
         }
         state
     }
+
+    fn handle_find_key(&self, mut state: State, key: Key) -> State {
+        match key {
+            Key::Esc => {
+                state.cmd = "".into();
+                state.set_mode(default());
+            }
+            Key::Backspace => {
+                state.cmd.pop();
+            }
+            Key::Char('\n') => {
+                if let Some(path) = state.find_result.take() {
+                    state.open_buffer(path);
+                }
+                state.cmd = "".into();
+                state.set_mode(default());
+            }
+            Key::Char(ch) => {
+                state.cmd.push(ch);
+                state.find_result = (state.find_handler)(&state.cmd)
+                    .ok()
+                    .and_then(|v| v.first().cloned());
+            }
+            _ => {}
+        }
+        state
+    }
 }
 
 impl Normal {
@@ -267,6 +300,9 @@ impl Normal {
             }
             Key::Char(':') => {
                 state.set_mode(Mode::Command);
+            }
+            Key::Ctrl('p') => {
+                state.set_mode(Mode::Find);
             }
             Key::Char('g') => {
                 if let Some(num_prefix) = self.num_prefix {
@@ -381,6 +417,16 @@ impl Normal {
             }
             Key::Char('<') => {
                 state.cur_buffer_mut().decrease_indent(times);
+            }
+            Key::Ctrl('P') => {
+                state.set_mode(Mode::Find);
+            }
+            Key::Char('A') => {
+                state
+                    .cur_buffer_mut()
+                    .extend_cursor(Idx::forward_to_line_end);
+                state.set_mode(Mode::Insert);
+                state.cur_buffer_state_mut().commit_undo_point();
             }
             _ => {}
         }
