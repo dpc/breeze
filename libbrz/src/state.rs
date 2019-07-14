@@ -25,15 +25,16 @@ impl BufferState {
             if self.buffer_history[restored_i].text != self.buffer.text {
                 // if we started editing and content changed after restoring from undo,
                 // we reset the undo point and start appending commit new undo points
-                let last = self.buffer_history.last().unwrap();
-                if last.text != self.buffer.text {
-                    if last.text != self.buffer_history[restored_i].text {
-                        self.buffer_history
-                            .push(self.buffer_history[restored_i].clone());
-                    }
-                    self.buffer_history.push(self.buffer.clone());
-                }
                 self.buffer_history_undo_i = None;
+
+                let new_buffer = self.buffer.clone();
+                self.buffer = self.buffer_history[restored_i].clone();
+                self.maybe_commit_undo_point();
+                self.buffer = new_buffer;
+                self.maybe_commit_undo_point();
+            } else if self.buffer_history[restored_i].selection != self.buffer.selection {
+                // XXX: TODO: We're editing history... :/ ... seems bad; does it give better UX?
+                self.buffer_history[restored_i].selection = self.buffer.selection.clone();
             }
         } else if let Some(last) = self.buffer_history.last_mut() {
             if last.text != self.buffer.text {
@@ -45,9 +46,7 @@ impl BufferState {
                 // before the edit
                 last.selection = self.buffer.selection.clone();
             }
-            dbg!(self.buffer_history.len());
         } else {
-            dbg!(self.buffer_history.len());
             self.buffer_history.push(self.buffer.clone());
         }
     }
