@@ -2,7 +2,6 @@ use crate::idx::*;
 use crate::state::State;
 use crate::Key;
 use default::default;
-use std::cmp;
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -227,10 +226,12 @@ impl Normal {
                 }));
             }
             other => {
+                state.cur_buffer_state_mut().maybe_commit_undo_point();
                 self.handle_not_digit(state, other);
                 if let &mut Mode::Normal(ref mut normal) = state.get_mode() {
                     normal.num_prefix = None;
                 }
+                state.cur_buffer_state_mut().maybe_commit_undo_point();
             }
         }
     }
@@ -240,42 +241,13 @@ impl Normal {
 
         match key {
             Key::Char('u') => {
-                if let Some(buffer_history_undo_i) =
-                    state.cur_buffer_state_mut().buffer_history_undo_i.as_mut()
-                {
-                    let history_i = buffer_history_undo_i.saturating_sub(1);
-                    *buffer_history_undo_i = history_i;
-                    state.cur_buffer_state_mut().buffer =
-                        state.cur_buffer_state().buffer_history[history_i].clone();
-                } else if !state.cur_buffer_state().buffer_history.is_empty() {
-                    let history_i = state
-                        .cur_buffer_state()
-                        .buffer_history
-                        .len()
-                        .saturating_sub(1);
-                    state.cur_buffer_state_mut().buffer_history_undo_i = Some(history_i);
-                    state.cur_buffer_state_mut().buffer =
-                        state.cur_buffer_state().buffer_history[history_i].clone();
-                }
+                state.cur_buffer_state_mut().undo(times);
             }
             Key::Char('U') => {
-                let buffer_state = state.cur_buffer_state_mut();
-                if let Some(buffer_history_undo_i) = buffer_state.buffer_history_undo_i.as_mut() {
-                    let history_i = cmp::min(
-                        buffer_history_undo_i.saturating_add(times),
-                        buffer_state.buffer_history.len() - 1,
-                    );
-                    *buffer_history_undo_i = history_i;
-                    buffer_state.buffer = buffer_state.buffer_history[history_i].clone();
-                }
+                state.cur_buffer_state_mut().redo(times);
             }
             other => {
-                let prev_buf = state.cur_buffer().clone();
                 self.handle_not_digit_not_undo(state, other);
-
-                state
-                    .cur_buffer_state_mut()
-                    .maybe_commit_undo_point(&prev_buf);
             }
         }
     }
@@ -319,7 +291,6 @@ impl Normal {
             }
             Key::Char('i') => {
                 state.set_mode(Mode::Insert);
-                state.cur_buffer_state_mut().commit_undo_point();
             }
             Key::Char('h') => {
                 state.cur_buffer_mut().move_cursor_backward(times);
@@ -417,7 +388,6 @@ impl Normal {
                     .cur_buffer_mut()
                     .extend_cursor(Idx::forward_to_line_end);
                 state.set_mode(Mode::Insert);
-                state.cur_buffer_state_mut().commit_undo_point();
             }
             _ => {}
         }

@@ -20,17 +20,59 @@ pub struct BufferState {
 }
 
 impl BufferState {
-    pub(crate) fn maybe_commit_undo_point(&mut self, prev_buf: &Buffer) {
-        if self.buffer_history.last().map(|b| &b.text) != Some(&self.buffer.text) {
-            self.buffer_history.push(prev_buf.clone());
-        }
-        self.buffer_history_undo_i = None;
-    }
-    pub(crate) fn commit_undo_point(&mut self) {
-        if self.buffer_history.last() != Some(&self.buffer) {
+    pub(crate) fn maybe_commit_undo_point(&mut self) {
+        if let Some(restored_i) = self.buffer_history_undo_i {
+            if self.buffer_history[restored_i].text != self.buffer.text {
+                // if we started editing and content changed after restoring from undo,
+                // we reset the undo point and start appending commit new undo points
+                let last = self.buffer_history.last().unwrap();
+                if last.text != self.buffer.text {
+                    if last.text != self.buffer_history[restored_i].text {
+                        self.buffer_history
+                            .push(self.buffer_history[restored_i].clone());
+                    }
+                    self.buffer_history.push(self.buffer.clone());
+                }
+                self.buffer_history_undo_i = None;
+            }
+        } else if let Some(last) = self.buffer_history.last_mut() {
+            if last.text != self.buffer.text {
+                // if buffer changed, we make it a new undo point
+                self.buffer_history.push(self.buffer.clone());
+            } else if last.selection != self.buffer.selection {
+                // if only the selection changed, we previous undo point,
+                // so undo always jumps to last cursor/selectin position from
+                // before the edit
+                last.selection = self.buffer.selection.clone();
+            }
+            dbg!(self.buffer_history.len());
+        } else {
+            dbg!(self.buffer_history.len());
             self.buffer_history.push(self.buffer.clone());
         }
-        self.buffer_history_undo_i = None;
+    }
+
+    pub(crate) fn undo(&mut self, times: usize) {
+        let i = if let Some(restored_i) = self.buffer_history_undo_i {
+            restored_i.saturating_sub(times)
+        } else {
+            self.maybe_commit_undo_point(); // commit to unify
+            self.buffer_history
+                .len()
+                .saturating_sub(1)
+                .saturating_sub(times)
+        };
+
+        self.buffer_history_undo_i = Some(i);
+        self.buffer = self.buffer_history[i].clone();
+    }
+
+    pub(crate) fn redo(&mut self, times: usize) {
+        if let Some(undo_i) = self.buffer_history_undo_i.as_mut() {
+            let new_i = std::cmp::min(undo_i.saturating_add(times), self.buffer_history.len() - 1);
+            *undo_i = new_i;
+            self.buffer = self.buffer_history[new_i].clone();
+        }
     }
 }
 
@@ -74,6 +116,9 @@ impl State {
     }
 
     pub(crate) fn set_mode(&mut self, mode: Mode) {
+        if self.mode != mode {
+            self.cur_buffer_state_mut().maybe_commit_undo_point();
+        }
         self.mode = mode;
     }
 
