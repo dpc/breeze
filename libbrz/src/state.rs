@@ -172,9 +172,9 @@ impl State {
         self.quit
     }
 
-    pub fn handle(mut self, key: Key) -> Self {
+    pub fn handle_key(&mut self, key: Key) {
         self.msg = None;
-        self.mode.handle(self.clone(), key)
+        self.mode.clone().handle(self, key)
     }
 
     pub fn cur_buffer(&self) -> &Buffer {

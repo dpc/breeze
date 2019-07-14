@@ -12,6 +12,7 @@ use termion::style;
 
 use ropey::Rope;
 use std;
+use std::process;
 
 mod opts;
 
@@ -198,7 +199,8 @@ impl Breeze {
         for e in stdin.events() {
             match e {
                 Ok(Event::Key(key)) => {
-                    self.state = self.state.clone().handle(termion_to_brz_key(key));
+                    eprintln!("{:?}", key);
+                    self.state.handle_key(termion_to_brz_key(key));
                 }
                 Ok(Event::Unsupported(_u)) => {
                     eprintln!("{:?}", _u);
@@ -362,7 +364,7 @@ impl Breeze {
     }
 }
 
-fn main() -> Result<()> {
+fn run() -> Result<()> {
     let opt = opts::Opts::from_args();
     let mut brz = Breeze::init()?;
 
@@ -372,4 +374,22 @@ fn main() -> Result<()> {
 
     brz.run()?;
     Ok(())
+}
+
+fn main() {
+    if let Err(e) = run() {
+        handle_error(&e)
+    }
+}
+
+fn handle_error(error: &failure::Error) {
+    eprintln!("error: {}", error);
+
+    for e in error.iter_chain() {
+        eprintln!("caused by: {}", e);
+    }
+
+    eprintln!("backtrace: {:?}", error.backtrace());
+
+    process::exit(1);
 }

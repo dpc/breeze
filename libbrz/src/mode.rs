@@ -51,7 +51,7 @@ impl Mode {
             .unwrap_or_else(|| "".into())
     }
 
-    pub fn handle(&self, state: State, key: Key) -> State {
+    pub fn handle(&self, state: &mut State, key: Key) {
         use self::Mode::*;
         match self {
             Normal(normal) => normal.handle(state, key),
@@ -62,14 +62,14 @@ impl Mode {
         }
     }
 
-    fn handle_command_key(&self, mut state: State, key: Key) -> State {
+    fn handle_command_key(&self, state: &mut State, key: Key) {
         match key {
             Key::Esc => {
                 state.cmd = "".into();
                 state.set_mode(default());
             }
             Key::Char('\n') => {
-                self.handle_command_complete(&mut state);
+                self.handle_command_complete(state);
                 state.cmd = "".into();
                 state.set_mode(default());
             }
@@ -81,7 +81,6 @@ impl Mode {
             }
             _ => {}
         }
-        state
     }
 
     fn handle_command_complete(&self, state: &mut State) {
@@ -115,7 +114,7 @@ impl Mode {
         }
     }
 
-    fn handle_insert(&self, mut state: State, key: Key) -> State {
+    fn handle_insert(&self, state: &mut State, key: Key) {
         match key {
             Key::Esc => {
                 state.set_mode(default());
@@ -148,10 +147,9 @@ impl Mode {
             }
             _ => {}
         }
-        state
     }
 
-    fn handle_goto(&self, mut state: State, key: Key) -> State {
+    fn handle_goto(&self, state: &mut State, key: Key) {
         state.set_mode(default());
         match key {
             Key::Esc => {}
@@ -186,10 +184,9 @@ impl Mode {
             }
             _ => {}
         }
-        state
     }
 
-    fn handle_find_key(&self, mut state: State, key: Key) -> State {
+    fn handle_find_key(&self, state: &mut State, key: Key) {
         match key {
             Key::Esc => {
                 state.cmd = "".into();
@@ -213,12 +210,11 @@ impl Mode {
             }
             _ => {}
         }
-        state
     }
 }
 
 impl Normal {
-    fn handle(&self, mut state: State, key: Key) -> State {
+    fn handle(&self, state: &mut State, key: Key) {
         match key {
             Key::Char(n @ '0'..='9') => {
                 state.set_mode(Mode::Normal(Normal {
@@ -229,19 +225,17 @@ impl Normal {
                             .saturating_add(n as usize - '0' as usize),
                     ),
                 }));
-                state
             }
             other => {
-                let mut state = self.handle_not_digit(state, other);
+                self.handle_not_digit(state, other);
                 if let &mut Mode::Normal(ref mut normal) = state.get_mode() {
                     normal.num_prefix = None;
                 }
-                state
             }
         }
     }
 
-    fn handle_not_digit(&self, mut state: State, key: Key) -> State {
+    fn handle_not_digit(&self, state: &mut State, key: Key) {
         let times = self.num_prefix.unwrap_or(1);
 
         match key {
@@ -263,7 +257,6 @@ impl Normal {
                     state.cur_buffer_state_mut().buffer =
                         state.cur_buffer_state().buffer_history[history_i].clone();
                 }
-                state
             }
             Key::Char('U') => {
                 let buffer_state = state.cur_buffer_state_mut();
@@ -275,21 +268,19 @@ impl Normal {
                     *buffer_history_undo_i = history_i;
                     buffer_state.buffer = buffer_state.buffer_history[history_i].clone();
                 }
-                state
             }
             other => {
                 let prev_buf = state.cur_buffer().clone();
-                let mut state = self.handle_not_digit_not_undo(state.clone(), other);
+                self.handle_not_digit_not_undo(state, other);
 
                 state
                     .cur_buffer_state_mut()
                     .maybe_commit_undo_point(&prev_buf);
-                state
             }
         }
     }
 
-    fn handle_not_digit_not_undo(&self, mut state: State, key: Key) -> State {
+    fn handle_not_digit_not_undo(&self, state: &mut State, key: Key) {
         let times = self.num_prefix.unwrap_or(1);
         match key {
             Key::Esc => {
@@ -430,6 +421,5 @@ impl Normal {
             }
             _ => {}
         }
-        state
     }
 }
