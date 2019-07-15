@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+pub mod action;
 pub mod buffer;
 pub mod coord;
 pub mod idx;
@@ -11,7 +12,10 @@ pub mod prelude;
 pub mod state;
 pub mod util;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub use self::mode::Mode;
+pub use self::state::State;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Key {
     /// Backspace.
     Backspace,

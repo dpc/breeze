@@ -1,8 +1,16 @@
+use crate::action;
 use crate::idx::*;
 use crate::state::State;
 use crate::Key;
 use default::default;
 use std::path::PathBuf;
+
+/*
+pub trait Mode {
+
+    fn handle(&self, state: &mut State, key: Key);
+}
+*/
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Normal {
@@ -289,9 +297,6 @@ impl Normal {
             Key::Down => {
                 state.cur_buffer_mut().move_cursor_down(times);
             }
-            Key::Char('i') => {
-                state.set_mode(Mode::Insert);
-            }
             Key::Char('h') => {
                 state.cur_buffer_mut().move_cursor_backward(times);
             }
@@ -389,7 +394,11 @@ impl Normal {
                     .extend_cursor(Idx::forward_to_line_end);
                 state.set_mode(Mode::Insert);
             }
-            _ => {}
+            key => {
+                if let Some(action) = action::normal::all_actions().get(&key) {
+                    action.execute(state);
+                }
+            }
         }
     }
 }
