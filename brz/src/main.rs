@@ -334,9 +334,9 @@ impl Breeze {
             .unwrap();
         }
         let right_side_status = format!(
-            "{} {}",
+            "{}",
             self.state.mode_name(),
-            self.state.mode_num_prefix_str(),
+            // self.state.mode_num_prefix_str(),
         );
         write!(
             &mut buf,

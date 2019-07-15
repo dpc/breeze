@@ -1,5 +1,5 @@
 use crate::buffer::Buffer;
-use crate::mode::Mode;
+use crate::mode::{self, Mode};
 use crate::Key;
 use default::default;
 use ropey::Rope;
@@ -76,13 +76,11 @@ impl BufferState {
 }
 
 /// The editor state
-#[derive(Clone)]
 pub struct State {
     pub(crate) quit: bool,
-    mode: Mode,
+    mode: Option<Box<dyn Mode + 'static>>,
     pub(crate) yanked: Vec<Rope>,
 
-    pub(crate) cmd: String,
     pub(crate) find_result: Option<PathBuf>,
     pub(crate) msg: Option<String>,
 
@@ -98,32 +96,21 @@ impl State {
     pub fn cmd_string(&self) -> Option<String> {
         if let Some(ref msg) = self.msg {
             Some(msg.to_owned())
-        } else if let Mode::Find = self.mode {
-            Some(format!(
-                "Find: {} {}",
-                self.cmd,
-                self.find_result
-                    .clone()
-                    .unwrap_or_else(|| PathBuf::new())
-                    .display()
-            ))
-        } else if let Mode::Command = self.mode {
-            Some(format!(":{}", self.cmd))
         } else {
-            None
+            self.mode.as_ref().expect("mode set").cmd_string()
         }
     }
 
-    pub(crate) fn set_mode(&mut self, mode: Mode) {
-        if self.mode != mode {
-            self.cur_buffer_state_mut().maybe_commit_undo_point();
-        }
-        self.mode = mode;
+    pub(crate) fn set_mode(&mut self, mode: impl Mode + 'static) {
+        self.cur_buffer_state_mut().maybe_commit_undo_point();
+        self.mode = Some(Box::new(mode) as Box<dyn Mode>);
     }
 
+    /*
     pub(crate) fn get_mode(&mut self) -> &mut Mode {
         &mut self.mode
     }
+    */
 
     pub fn open_buffer(&mut self, path: PathBuf) {
         let mut found = None;
@@ -218,7 +205,13 @@ impl State {
 
     pub fn handle_key(&mut self, key: Key) {
         self.msg = None;
-        self.mode.clone().handle(self, key)
+        let mut mode = self.mode.take().expect("mode set");
+
+        mode.handle(self, key);
+
+        if self.mode.is_none() {
+            self.mode = Some(mode)
+        }
     }
 
     pub fn cur_buffer(&self) -> &Buffer {
@@ -237,11 +230,7 @@ impl State {
         &mut self.buffers[self.cur_buffer_i]
     }
     pub fn mode_name(&self) -> &str {
-        self.mode.name()
-    }
-
-    pub fn mode_num_prefix_str(&self) -> String {
-        self.mode.num_prefix_str()
+        self.mode.as_ref().expect("mode set").name()
     }
 
     pub fn register_read_handler(&mut self, f: impl Fn(&Path) -> io::Result<Rope> + 'static) {
@@ -274,9 +263,8 @@ impl Default for State {
     fn default() -> Self {
         let mut s = State {
             quit: false,
-            mode: Mode::default(),
+            mode: Some(Box::new(mode::Normal::default())),
             yanked: vec![],
-            cmd: "".into(),
             find_result: None,
             msg: None,
 
