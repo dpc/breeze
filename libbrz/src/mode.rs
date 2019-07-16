@@ -4,6 +4,7 @@ use crate::state::State;
 use crate::Key;
 use std::path::PathBuf;
 
+// TODO: mode should render itself, ha!
 pub trait Mode {
     fn name(&self) -> &str;
     fn cmd_string(&self) -> Option<String> {

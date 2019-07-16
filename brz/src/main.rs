@@ -197,6 +197,8 @@ impl Breeze {
 
         let stdin = std::io::stdin();
         for e in stdin.events() {
+            // TODO: https://gitlab.redox-os.org/redox-os/termion/issues/151
+            self.fix_size()?;
             match e {
                 Ok(Event::Key(key)) => {
                     eprintln!("{:?}", key);
@@ -340,11 +342,12 @@ impl Breeze {
         );
         write!(
             &mut buf,
-            "{}",
+            "{}{}",
             termion::cursor::Goto(
                 (self.display_cols - right_side_status.len()) as u16,
                 self.display_rows as u16
             ),
+            right_side_status
         )
         .unwrap();
 
