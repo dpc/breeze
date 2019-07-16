@@ -201,11 +201,9 @@ impl Breeze {
             self.fix_size()?;
             match e {
                 Ok(Event::Key(key)) => {
-                    eprintln!("{:?}", key);
                     self.state.handle_key(termion_to_brz_key(key));
                 }
                 Ok(Event::Unsupported(_u)) => {
-                    eprintln!("{:?}", _u);
                     self.fix_size()?;
                 }
                 Ok(Event::Mouse(_)) => {
