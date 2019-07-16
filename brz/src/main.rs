@@ -322,6 +322,27 @@ impl Breeze {
             ch_idx += line.len_chars();
         }
 
+        for (i, (key, action)) in self
+            .state
+            .get_mode()
+            .available_actions()
+            .iter()
+            .enumerate()
+            .take(10)
+        {
+            write!(
+                &mut buf,
+                "{}{} {}",
+                termion::cursor::Goto(
+                    (self.display_cols - self.display_cols / 4) as u16,
+                    self.display_rows.saturating_sub(12).saturating_add(i) as u16
+                ),
+                key,
+                action.help()
+            )
+            .unwrap();
+        }
+
         // status
         buf.reset_color().unwrap();
         if let Some(cmd_str) = self.state.cmd_string() {

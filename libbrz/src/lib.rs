@@ -14,6 +14,7 @@ pub mod util;
 
 pub use self::mode::Mode;
 pub use self::state::State;
+use std::fmt;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Key {
@@ -58,4 +59,18 @@ pub enum Key {
 
     #[doc(hidden)]
     __IsNotComplete,
+}
+
+impl fmt::Display for Key {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use self::Key::*;
+        match *self {
+            F(u) => write!(f, "f{}", u),
+            Char(c) => write!(f, "{}", c),
+            Alt(c) => write!(f, "a-{}", c),
+            Ctrl(c) => write!(f, "c-{}", c),
+            Esc => write!(f, "esc"),
+            _ => write!(f, "?"),
+        }
+    }
 }

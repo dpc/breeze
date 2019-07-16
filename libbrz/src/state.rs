@@ -106,6 +106,10 @@ impl State {
         self.mode = Some(Box::new(mode) as Box<dyn Mode>);
     }
 
+    pub fn get_mode(&self) -> &(dyn Mode + 'static) {
+        &**self.mode.as_ref().unwrap()
+    }
+
     /*
     pub(crate) fn get_mode(&mut self) -> &mut Mode {
         &mut self.mode
