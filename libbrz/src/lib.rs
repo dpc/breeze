@@ -9,9 +9,11 @@ pub mod range;
 pub mod selection;
 
 pub mod prelude;
+pub mod render;
 pub mod state;
 pub mod util;
 
+pub use self::coord::Coord;
 pub use self::mode::Mode;
 pub use self::state::State;
 use std::fmt;
