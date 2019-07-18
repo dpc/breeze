@@ -24,7 +24,7 @@ impl Mode for Goto {
             }
             Key::Char('k') => {
                 state.cur_buffer_mut().move_cursor_coord(|coord, text| {
-                    coord.set_line(0, text).trim_column_to_buf(text).into()
+                    coord.set_line(0, text).trim_column_to_buf(text)
                 });
             }
             Key::Char('j') => {
@@ -32,7 +32,6 @@ impl Mode for Goto {
                     coord
                         .set_line(text.len_lines().saturating_sub(1), text)
                         .trim_column_to_buf(text)
-                        .into()
                 });
             }
             Key::Char('i') => {

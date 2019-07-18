@@ -12,7 +12,7 @@ pub type Map = BTreeMap<Key, Box<Action + Send + Sync + 'static>>;
 
 pub fn no_actions() -> &'static Map {
     static INSTANCE: OnceCell<Map> = OnceCell::new();
-    INSTANCE.get_or_init(|| BTreeMap::new())
+    INSTANCE.get_or_init(BTreeMap::new)
 }
 pub trait Action {
     fn help(&self) -> &str;

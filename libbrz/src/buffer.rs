@@ -340,7 +340,7 @@ impl Buffer {
         self.selection.sort();
 
         for idx in insertion_points {
-            if s.len() > 0 {
+            if !s.is_empty() {
                 self.selection.fix_on_insert(idx, s.len());
                 self.text.insert(idx.0, s);
             }

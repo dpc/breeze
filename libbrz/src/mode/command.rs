@@ -43,7 +43,7 @@ impl Mode for Command {
 impl Command {
     fn handle_command_complete(&self, state: &mut State) {
         let cmd: Vec<_> = self.cmd.split_whitespace().map(str::to_owned).collect();
-        if cmd.len() < 1 {
+        if cmd.is_empty() {
             return;
         }
 

@@ -4,6 +4,7 @@ use crate::Key;
 use default::default;
 use ropey::Rope;
 
+use crate::render::Renderer;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -160,7 +161,7 @@ impl State {
                 }
             }
         } else {
-            self.msg = Some(format!("No path given"));
+            self.msg = Some("No path given".to_string());
         }
     }
 
@@ -250,6 +251,10 @@ impl State {
         f: impl Fn(&str) -> io::Result<Vec<PathBuf>> + 'static,
     ) {
         self.find_handler = Arc::new(f);
+    }
+
+    pub fn render_buffer(&self, _render: &mut dyn Renderer) {
+        unimplemented!("sonx");
     }
 }
 
