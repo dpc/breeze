@@ -26,29 +26,53 @@ impl std::ops::Add<Coord> for Coord {
 }
 
 impl Coord {
-    fn is_inside(self, other: Coord) -> bool {
+    pub fn add_x(mut self, x: usize) -> Coord {
+        self.x = self.x.saturating_add(x);
+        self
+    }
+
+    pub fn add_y(mut self, y: usize) -> Coord {
+        self.y = self.y.saturating_add(y);
+        self
+    }
+
+    pub fn center(self) -> Self {
+        Self {
+            x: self.x / 2,
+            y: self.y / 2,
+        }
+    }
+
+    fn is_inside_dimensions(self, other: Coord) -> bool {
         self.y < other.y && self.x < other.x
+    }
+    fn is_inside(self, other: Rect) -> bool {
+        self.is_inside_dimensions(other.dimensions)
     }
 }
 
 pub trait Renderer {
     fn dimensions(&self) -> Coord;
-    fn rect(&self) -> Rect {
+    /// The whole dimensions as a `Rect` that starts at (0, 0)
+    fn dimensions_rect(&self) -> Rect {
         Rect {
             offset: Coord { x: 0, y: 0 },
             dimensions: self.dimensions(),
         }
     }
     fn put(&mut self, coord: Coord, ch: char, style: Style);
+
     fn print(&mut self, coord: Coord, text: &str, style: Style) {
         let dims = self.dimensions();
         for (i, ch) in text.chars().enumerate() {
-            if dims.y <= coord.y || dims.x <= (coord.x + i) {
+            if !coord.add_x(i).is_inside_dimensions(dims) {
                 break;
             }
             self.put(coord, ch, style);
         }
     }
+
+    fn set_cursor(&mut self, coord: Option<Coord>);
 }
 
 impl<T> Renderer for &mut T
@@ -60,6 +84,9 @@ where
     }
     fn put(&mut self, coord: Coord, ch: char, style: Style) {
         (**self).put(coord, ch, style)
+    }
+    fn set_cursor(&mut self, coord: Option<Coord>) {
+        (**self).set_cursor(coord)
     }
 }
 
@@ -138,14 +165,15 @@ impl Rect {
         R: Renderer,
     {
         View {
-            view: self,
+            rect: self,
             backend: r,
         }
     }
 }
 
+/// A rectangual view over another `Renderer`
 pub struct View<'r, R> {
-    view: Rect,
+    rect: Rect,
     backend: &'r mut R,
 }
 
@@ -154,12 +182,15 @@ where
     R: Renderer,
 {
     fn dimensions(&self) -> Coord {
-        self.view.dimensions
+        self.rect.dimensions
     }
 
     fn put(&mut self, coord: Coord, ch: char, style: Style) {
-        if coord.is_inside(self.view.dimensions) {
-            self.backend.put(coord + self.view.offset, ch, style)
+        if coord.is_inside(self.rect) {
+            self.backend.put(coord + self.rect.offset, ch, style)
         }
+    }
+    fn set_cursor(&mut self, coord: Option<Coord>) {
+        self.backend.set_cursor(coord.map(|c| c + self.rect.offset))
     }
 }

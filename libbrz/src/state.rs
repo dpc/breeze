@@ -4,7 +4,7 @@ use crate::Key;
 use default::default;
 use ropey::Rope;
 
-use crate::render::Renderer;
+use crate::render::{self, Renderer};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -253,8 +253,10 @@ impl State {
         self.find_handler = Arc::new(f);
     }
 
-    pub fn render_buffer(&self, _render: &mut dyn Renderer) {
-        unimplemented!("sonx");
+    pub fn render_buffer(&self, render: &mut dyn Renderer) {
+        let center = render.dimensions().center();
+        render.print(center, "HELLO WORLD", render::Style::default());
+        render.set_cursor(Some(center));
     }
 }
 

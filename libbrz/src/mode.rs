@@ -36,7 +36,7 @@ pub trait Mode {
 }
 
 fn default_render(mode: &(impl Mode + ?Sized), state: &State, mut render: &mut dyn Renderer) {
-    let total_rect = render.rect();
+    let total_rect = render.dimensions_rect();
     let (buffer_rect, status_rect) = total_rect.split_horizontaly_at(-1);
     state.render_buffer(&mut buffer_rect.to_renderer(&mut render));
     let mut status_view = status_rect.to_renderer(&mut render);
@@ -45,5 +45,4 @@ fn default_render(mode: &(impl Mode + ?Sized), state: &State, mut render: &mut d
         mode.name(),
         render::Style::default(),
     );
-    unimplemented!();
 }
