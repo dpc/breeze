@@ -37,12 +37,10 @@ pub trait Mode {
 
 fn default_render(mode: &(impl Mode + ?Sized), state: &State, mut render: &mut dyn Renderer) {
     let total_rect = render.dimensions_rect();
+    let style = render.color_map().default_style();
     let (buffer_rect, status_rect) = total_rect.split_horizontaly_at(-1);
     state.render_buffer(&mut buffer_rect.to_renderer(&mut render));
+
     let mut status_view = status_rect.to_renderer(&mut render);
-    status_view.print(
-        render::Coord { x: 0, y: 0 },
-        mode.name(),
-        render::Style::default(),
-    );
+    status_view.print(render::Coord { x: 0, y: 0 }, mode.name(), style);
 }

@@ -2,7 +2,7 @@
 ///
 /// This is logically different from the text `Coord`-inate,
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Style {
     pub fg: u32,
     pub bg: u32,
@@ -13,6 +13,21 @@ pub struct Style {
 pub struct Coord {
     pub x: usize,
     pub y: usize,
+}
+
+pub struct ColorMap {
+    pub default_bg: u32,
+    pub default_fg: u32,
+}
+
+impl ColorMap {
+    pub fn default_style(&self) -> Style {
+        Style {
+            fg: self.default_fg,
+            bg: self.default_bg,
+            style: 0,
+        }
+    }
 }
 
 impl std::ops::Add<Coord> for Coord {
@@ -52,6 +67,7 @@ impl Coord {
 }
 
 pub trait Renderer {
+    fn color_map(&self) -> &ColorMap;
     fn dimensions(&self) -> Coord;
     /// The whole dimensions as a `Rect` that starts at (0, 0)
     fn dimensions_rect(&self) -> Rect {
@@ -65,7 +81,8 @@ pub trait Renderer {
     fn print(&mut self, coord: Coord, text: &str, style: Style) {
         let dims = self.dimensions();
         for (i, ch) in text.chars().enumerate() {
-            if !coord.add_x(i).is_inside_dimensions(dims) {
+            let coord = coord.add_x(i);
+            if !coord.is_inside_dimensions(dims) {
                 break;
             }
             self.put(coord, ch, style);
@@ -79,6 +96,9 @@ impl<T> Renderer for &mut T
 where
     T: Renderer + ?Sized,
 {
+    fn color_map(&self) -> &ColorMap {
+        (**self).color_map()
+    }
     fn dimensions(&self) -> Coord {
         (**self).dimensions()
     }
@@ -99,9 +119,9 @@ pub struct Rect {
 impl Rect {
     pub fn split_verticaly_at(self, x: isize) -> (Rect, Rect) {
         let x = if x < 0 {
-            self.dimensions.x + (-x as usize)
+            (self.dimensions.x as isize + x) as usize
         } else if x > 0 {
-            self.dimensions.x
+            x as usize
         } else {
             panic!("Can't split at 0")
         };
@@ -117,8 +137,8 @@ impl Rect {
             },
             Rect {
                 offset: Coord {
-                    x: self.dimensions.x + x,
-                    y: self.dimensions.y,
+                    x: self.offset.x + x,
+                    y: self.offset.y,
                 },
                 dimensions: Coord {
                     x: self.dimensions.x - x,
@@ -130,9 +150,9 @@ impl Rect {
 
     pub fn split_horizontaly_at(self, y: isize) -> (Rect, Rect) {
         let y = if y < 0 {
-            self.dimensions.y + (-y as usize)
+            (self.dimensions.y as isize + y) as usize
         } else if y > 0 {
-            self.dimensions.y
+            y as usize
         } else {
             panic!("Can't split at 0")
         };
@@ -149,8 +169,8 @@ impl Rect {
             },
             Rect {
                 offset: Coord {
-                    x: self.dimensions.x,
-                    y: self.dimensions.y + y,
+                    x: self.offset.x,
+                    y: self.offset.y + y,
                 },
                 dimensions: Coord {
                     x: self.dimensions.x,
@@ -181,6 +201,10 @@ impl<'r, R> Renderer for View<'r, R>
 where
     R: Renderer,
 {
+    fn color_map(&self) -> &ColorMap {
+        self.backend.color_map()
+    }
+
     fn dimensions(&self) -> Coord {
         self.rect.dimensions
     }
