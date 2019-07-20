@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 use crate::{coord::*, idx::*, prelude::*, selection::*, util::char};
 use ropey::Rope;
+use std::cell::RefCell;
 use std::cmp::min;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -167,6 +168,8 @@ pub struct Buffer {
 
     pub tabstop: usize,
     pub expand_tabs: bool,
+
+    pub view_line_offset: RefCell<usize>,
 }
 
 impl Default for Buffer {
@@ -177,6 +180,7 @@ impl Default for Buffer {
             selection: default(),
             expand_tabs: true,
             path: None,
+            view_line_offset: RefCell::new(0),
         }
     }
 }
@@ -184,6 +188,10 @@ impl Default for Buffer {
 impl Buffer {
     pub fn from_text(text: Rope) -> Self {
         Self { text, ..default() }
+    }
+
+    pub fn lines(&self) -> usize {
+        self.text.len_lines()
     }
 
     fn for_each_selection<F, R>(&self, mut f: F) -> Vec<R>
@@ -662,7 +670,7 @@ impl Buffer {
         self.move_cursor_2(Idx::backward_word)
     }
 
-    pub fn cursor_pos(&self) -> Coord {
+    pub fn cursor_coord(&self) -> Coord {
         self.selection.selections[0].cursor.to_coord(&self.text)
     }
 

@@ -4,7 +4,8 @@ use crate::Key;
 use default::default;
 use ropey::Rope;
 
-use crate::render::Renderer;
+use crate::render::{self, Renderer};
+use std::cmp::min;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -69,7 +70,7 @@ impl BufferState {
 
     pub(crate) fn redo(&mut self, times: usize) {
         if let Some(undo_i) = self.buffer_history_undo_i.as_mut() {
-            let new_i = std::cmp::min(undo_i.saturating_add(times), self.buffer_history.len() - 1);
+            let new_i = min(undo_i.saturating_add(times), self.buffer_history.len() - 1);
             *undo_i = new_i;
             self.buffer = self.buffer_history[new_i].clone();
         }
@@ -257,7 +258,67 @@ impl State {
         self.mode.as_ref().expect("mode set").render(self, render);
     }
 
-    pub fn render_buffer(&self, render: &mut dyn Renderer) {
+    pub fn render_buffer(&self, mut render: &mut dyn Renderer) {
+        let dims = render.dimensions();
+        let buffer = self.cur_buffer();
+
+        let window_height = dims.y;
+        let window_margin = window_height / 4;
+        let cursor_coord = buffer.cursor_coord();
+        let first_line_that_must_be_visible = cursor_coord.line.saturating_sub(window_margin);
+        let last_line_that_must_by_visible = min(
+            cursor_coord.line.saturating_add(window_margin),
+            buffer.lines(),
+        );
+        debug_assert!(first_line_that_must_be_visible <= last_line_that_must_by_visible);
+
+        let mut line_offset = buffer.view_line_offset.borrow_mut();
+
+        if first_line_that_must_be_visible < *line_offset {
+            *line_offset = first_line_that_must_be_visible;
+        }
+        if line_offset.saturating_add(window_height) < last_line_that_must_by_visible {
+            *line_offset = last_line_that_must_by_visible.saturating_sub(window_height);
+        }
+
+        let start_line = min(*line_offset, buffer.lines().saturating_sub(window_height));
+
+        drop(line_offset);
+        // TODO: 4 to be dynamic instead
+        let line_nums_width = buffer.lines().to_string().len();
+        let (line_nums_rect, content_rect) = render
+            .dimensions_rect()
+            .split_verticaly_at(line_nums_width as isize);
+        self.render_line_nums(&mut line_nums_rect.to_renderer(&mut render), start_line);
+        self.render_content(&mut content_rect.to_renderer(&mut render), start_line);
+    }
+
+    pub fn render_line_nums(&self, render: &mut dyn Renderer, start_line: usize) {
+        let width = render.dimensions().x;
+        for line in start_line..(start_line + render.dimensions().y) {
+            let style = render.color_map().default_style();
+            let line_str = line.to_string();
+            render.print(
+                render::Coord {
+                    x: width - line_str.len(),
+                    y: line - start_line,
+                },
+                &line_str,
+                style,
+            );
+        }
+    }
+    pub fn render_content(&self, render: &mut dyn Renderer, start_line: usize) {
+        let buffer = self.cur_buffer();
+        let cursor_coord = buffer.cursor_coord();
+
+        render.set_cursor(Some(render::Coord {
+            y: cursor_coord.line.saturating_sub(start_line),
+            x: cursor_coord.column,
+        }));
+    }
+
+    pub fn render_splash(&self, render: &mut dyn Renderer) {
         let center = render.dimensions().center();
         let style = render.color_map().default_style();
         render.print(center, "HELLO WORLD", style);
