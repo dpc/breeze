@@ -14,6 +14,7 @@ pub mod state;
 pub mod util;
 
 pub use self::coord::Coord;
+pub use self::idx::Idx;
 pub use self::mode::Mode;
 pub use self::state::State;
 use std::fmt;

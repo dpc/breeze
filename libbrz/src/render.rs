@@ -15,9 +15,13 @@ pub struct Coord {
     pub y: usize,
 }
 
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ColorMap {
     pub reset: Style,
     pub line_num: Style,
+    pub direction_marker: Style,
+    pub selection: Style,
+    pub special: Style,
 }
 
 impl ColorMap {

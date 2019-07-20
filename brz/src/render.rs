@@ -152,6 +152,20 @@ impl Render {
                 fg: Some(10),
                 ..Default::default()
             },
+            direction_marker: render::Style {
+                fg: Some(14),
+                bg: Some(10),
+                ..Default::default()
+            },
+            selection: render::Style {
+                fg: Some(16),
+                bg: Some(4),
+                ..Default::default()
+            },
+            special: render::Style {
+                fg: Some(14),
+                ..Default::default()
+            },
         };
 
         let mut s = Render {
@@ -202,6 +216,7 @@ impl Render {
         }
         self.draw_diff(&mut buf);
         self.draw_cursor(&mut buf);
+        buf.reset_all()?;
 
         let buf = buf.into_vec();
         dbg!(buf.len());

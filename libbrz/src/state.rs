@@ -1,11 +1,13 @@
 use crate::buffer::Buffer;
+use crate::buffer::VisualSelection;
 use crate::mode::{self, Mode};
+use crate::Idx;
 use crate::Key;
 use default::default;
 use ropey::Rope;
 
-use crate::coord;
 use crate::render::{self, Renderer};
+use crate::{buffer, coord};
 use std::cmp::min;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -313,7 +315,7 @@ impl State {
         let window_dims = render.dimensions();
         let cursor_coord = buffer.cursor_coord();
 
-        let style = render.color_map().default_style();
+        let color_map = { render.color_map().to_owned() };
 
         let mut cur_ch_idx = coord::Coord {
             line: start_line,
@@ -335,15 +337,52 @@ impl State {
 
             let ch = buffer.text.char(cur_ch_idx);
 
-            // let visual_selection = buffer.idx_selection_type(Idx(cur_ch_idx));
+            let visual_selection = buffer.idx_selection_type(Idx(cur_ch_idx));
+
+            let (visual_ch, visual_ch_width, special) = match ch {
+                '\n' => {
+                    if visual_selection != VisualSelection::None {
+                        (Some('↩'), 1, true) // alternatives: ⤶  🡿
+                    } else {
+                        (None, 0, true)
+                    }
+                }
+                '\t' => (
+                    Some('.'),
+                    buffer::distance_to_next_tabstop(
+                        Idx(cur_ch_idx).to_coord(&buffer.text).column,
+                        4,
+                    ),
+                    false,
+                ),
+                ch => (Some(ch), 1, false),
+            };
+
+            let bg = match visual_selection {
+                VisualSelection::DirectionMarker => color_map.direction_marker.bg,
+                VisualSelection::Selection => color_map.selection.bg,
+                VisualSelection::None => None,
+            };
+
+            let style = render::Style {
+                fg: if special { color_map.special.fg } else { None },
+                bg,
+                style: None,
+            };
 
             if ch == '\n' {
-                render.put(cur_visual_coord, '↩', style);
+                if let Some(visual_ch) = visual_ch {
+                    render.put(cur_visual_coord, visual_ch, style);
+                }
                 cur_visual_coord.x = 0;
                 cur_visual_coord.y += 1;
             } else {
-                render.put(cur_visual_coord, ch, style);
-                cur_visual_coord.x += 1;
+                for _ in 0..visual_ch_width {
+                    if let Some(visual_ch) = visual_ch {
+                        render.put(cur_visual_coord, visual_ch, style);
+                    }
+                    cur_visual_coord.x += 1;
+                }
             }
             cur_ch_idx += 1;
         }
