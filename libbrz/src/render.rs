@@ -4,9 +4,9 @@
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Style {
-    pub fg: u32,
-    pub bg: u32,
-    pub style: u32,
+    pub fg: Option<u32>,
+    pub bg: Option<u32>,
+    pub style: Option<u32>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -16,17 +16,13 @@ pub struct Coord {
 }
 
 pub struct ColorMap {
-    pub default_bg: u32,
-    pub default_fg: u32,
+    pub reset: Style,
+    pub line_num: Style,
 }
 
 impl ColorMap {
     pub fn default_style(&self) -> Style {
-        Style {
-            fg: self.default_fg,
-            bg: self.default_bg,
-            style: 0,
-        }
+        self.reset
     }
 }
 

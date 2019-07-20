@@ -37,8 +37,6 @@ fn termion_to_brz_key(key: termion::event::Key) -> libbrz::Key {
     }
 }
 
-const STYLE_RESET: u32 = 0xffff;
-
 /// Keep track of color codes in output
 ///
 /// This is to save on unnecessary output to terminal
@@ -116,27 +114,23 @@ impl CachingAnsciWriter {
         Ok(())
     }
 
-    fn set_style(&mut self, style: Option<render::Style>) -> io::Result<()> {
-        if let Some(style) = style {
-            if style.fg == STYLE_RESET {
-                self.reset_fg()?;
-            } else {
-                self.change_fg(color::AnsiValue(style.fg as u8))?;
-            }
-            if style.bg == STYLE_RESET {
-                self.reset_bg()?;
-            } else {
-                self.change_bg(color::AnsiValue(style.bg as u8))?;
-            }
-
-            if style.style == STYLE_RESET {
-                self.reset_style()?;
-            } else {
-                self.change_style((style.style & 1) == 1)?;
-            }
+    fn set_style(&mut self, style: render::Style) -> io::Result<()> {
+        if let Some(fg) = style.fg {
+            self.change_fg(color::AnsiValue(fg as u8))?;
         } else {
-            self.reset_all()?;
-        };
+            self.reset_fg()?;
+        }
+        if let Some(bg) = style.bg {
+            self.change_bg(color::AnsiValue(bg as u8))?;
+        } else {
+            self.reset_bg()?;
+        }
+
+        if let Some(style) = style.style {
+            self.change_style((style & 1) == 1)?;
+        } else {
+            self.reset_style()?;
+        }
 
         Ok(())
     }
@@ -155,14 +149,14 @@ impl io::Write for CachingAnsciWriter {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 struct Char {
     ch: char,
-    style: Option<render::Style>,
+    style: render::Style,
 }
 
 impl Default for Char {
     fn default() -> Self {
         Char {
             ch: ' ',
-            style: None,
+            style: render::Style::default(),
         }
     }
 }
@@ -183,8 +177,11 @@ impl Render {
     fn new() -> Result<Self> {
         let screen = AlternateScreen::from(std::io::stdout().into_raw_mode().unwrap());
         let color_map = render::ColorMap {
-            default_fg: STYLE_RESET,
-            default_bg: STYLE_RESET,
+            reset: render::Style::default(),
+            line_num: render::Style {
+                fg: Some(10),
+                ..Default::default()
+            },
         };
 
         let mut s = Render {
@@ -311,12 +308,8 @@ impl render::Renderer for Render {
     }
 
     fn put(&mut self, coord: render::Coord, ch: char, style: render::Style) {
-        self.char_at_mut(coord).map(|c| {
-            *c = Char {
-                ch,
-                style: Some(style),
-            }
-        });
+        self.char_at_mut(coord)
+            .map(|c| *c = Char { ch, style: style });
     }
 
     fn set_cursor(&mut self, coord: Option<render::Coord>) {

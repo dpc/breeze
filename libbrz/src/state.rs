@@ -4,6 +4,7 @@ use crate::Key;
 use default::default;
 use ropey::Rope;
 
+use crate::coord;
 use crate::render::{self, Renderer};
 use std::cmp::min;
 use std::io;
@@ -284,8 +285,7 @@ impl State {
         let start_line = min(*line_offset, buffer.lines().saturating_sub(window_height));
 
         drop(line_offset);
-        // TODO: 4 to be dynamic instead
-        let line_nums_width = buffer.lines().to_string().len();
+        let line_nums_width = buffer.lines().to_string().len() + 1;
         let (line_nums_rect, content_rect) = render
             .dimensions_rect()
             .split_verticaly_at(line_nums_width as isize);
@@ -295,9 +295,9 @@ impl State {
 
     pub fn render_line_nums(&self, render: &mut dyn Renderer, start_line: usize) {
         let width = render.dimensions().x;
+        let style = render.color_map().line_num;
         for line in start_line..(start_line + render.dimensions().y) {
-            let style = render.color_map().default_style();
-            let line_str = line.to_string();
+            let line_str = format!("{} ", line.to_string());
             render.print(
                 render::Coord {
                     x: width - line_str.len(),
@@ -310,7 +310,43 @@ impl State {
     }
     pub fn render_content(&self, render: &mut dyn Renderer, start_line: usize) {
         let buffer = self.cur_buffer();
+        let window_dims = render.dimensions();
         let cursor_coord = buffer.cursor_coord();
+
+        let style = render.color_map().default_style();
+
+        let mut cur_ch_idx = coord::Coord {
+            line: start_line,
+            column: 0,
+        }
+        .to_idx(&buffer.text)
+        .0;
+
+        let mut cur_visual_coord = render::Coord { x: 0, y: 0 };
+
+        loop {
+            if window_dims.y <= cur_visual_coord.y {
+                break;
+            }
+
+            if buffer.text.len_chars() <= cur_ch_idx {
+                break;
+            }
+
+            let ch = buffer.text.char(cur_ch_idx);
+
+            // let visual_selection = buffer.idx_selection_type(Idx(cur_ch_idx));
+
+            if ch == '\n' {
+                render.put(cur_visual_coord, '↩', style);
+                cur_visual_coord.x = 0;
+                cur_visual_coord.y += 1;
+            } else {
+                render.put(cur_visual_coord, ch, style);
+                cur_visual_coord.x += 1;
+            }
+            cur_ch_idx += 1;
+        }
 
         render.set_cursor(Some(render::Coord {
             y: cursor_coord.line.saturating_sub(start_line),
