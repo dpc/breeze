@@ -285,24 +285,29 @@ impl State {
         }
 
         let start_line = min(*line_offset, buffer.lines().saturating_sub(window_height));
+        let end_line = min(start_line.saturating_add(window_height), buffer.lines());
 
         drop(line_offset);
         let line_nums_width = buffer.lines().to_string().len() + 1;
         let (line_nums_rect, content_rect) = render
             .dimensions_rect()
             .split_verticaly_at(line_nums_width as isize);
-        self.render_line_nums(&mut line_nums_rect.to_renderer(&mut render), start_line);
+        self.render_line_nums(
+            &mut line_nums_rect.to_renderer(&mut render),
+            start_line,
+            end_line,
+        );
         self.render_content(&mut content_rect.to_renderer(&mut render), start_line);
     }
 
-    pub fn render_line_nums(&self, render: &mut dyn Renderer, start_line: usize) {
+    pub fn render_line_nums(&self, render: &mut dyn Renderer, start_line: usize, end_line: usize) {
         let width = render.dimensions().x;
         let style = render.color_map().line_num;
-        for line in start_line..(start_line + render.dimensions().y) {
+        for line in start_line..end_line {
             let line_str = format!("{} ", line.to_string());
             render.print(
                 render::Coord {
-                    x: width - line_str.len(),
+                    x: dbg!(width) - dbg!(line_str.len()),
                     y: line - start_line,
                 },
                 &line_str,
@@ -339,6 +344,8 @@ impl State {
 
             let visual_selection = buffer.idx_selection_type(Idx(cur_ch_idx));
 
+            let style = color_map.reset;
+
             let (visual_ch, visual_ch_width, special) = match ch {
                 '\n' => {
                     if visual_selection != VisualSelection::None {
@@ -358,16 +365,16 @@ impl State {
                 ch => (Some(ch), 1, false),
             };
 
-            let bg = match visual_selection {
-                VisualSelection::DirectionMarker => color_map.direction_marker.bg,
-                VisualSelection::Selection => color_map.selection.bg,
-                VisualSelection::None => None,
+            let style = if special & visual_ch.is_some() {
+                style.paintover(color_map.special)
+            } else {
+                style
             };
 
-            let style = render::Style {
-                fg: if special { color_map.special.fg } else { None },
-                bg,
-                style: None,
+            let style = match visual_selection {
+                VisualSelection::DirectionMarker => style.paintover(color_map.direction_marker),
+                VisualSelection::Selection => style.paintover(color_map.selection),
+                VisualSelection::None => style,
             };
 
             if ch == '\n' {

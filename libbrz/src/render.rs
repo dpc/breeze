@@ -9,6 +9,22 @@ pub struct Style {
     pub style: Option<u32>,
 }
 
+impl Style {
+    pub fn paintover(mut self, other: Self) -> Self {
+        if let Some(o_fg) = other.fg {
+            self.fg = Some(o_fg)
+        }
+
+        if let Some(o_bg) = other.bg {
+            self.bg = Some(o_bg)
+        }
+        if let Some(o_style) = other.style {
+            self.style = Some(o_style)
+        }
+        self
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct Coord {
     pub x: usize,
