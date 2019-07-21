@@ -8,17 +8,11 @@
   <br>
 </p>
 
-#### Primarily hosted on [sr.ht](https://sr.ht)
-
-Github repo is just a mirror for discoverability.
-
-* Primary git repo: https://git.sr.ht/~dpc/breeze
-* Primarily issue tracker: https://todo.sr.ht/~dpc/breeze
-
-# `breeze` -  An experimental, kakoune-inspired CLI-centric text/code editor with |-shaped cursor (in Rust)
+# `breeze` -  An innovative, modal, CLI-centric text/code editor
 
 ### Features & Goals
 
+* Heavily inspired by [Kakoune](http://kakoune.org/)
 * Modal & CLI-centric, but in a modern edition
     * `|`-shaped cursor
     * Kakoune-inspired editing experience
@@ -32,9 +26,7 @@ of using Vim. I think changing *action, movement* into *movement, action* is a
 brilliant idea. I enjoy simplicity of Kakoune and I am generally quite happy using it.
 
 However I have couple of ideas how Kakoune could be better and/or disagree with a couple
-of things in it.
-
-So I decided to hack together my own code editor to demonstrate / try them.
+of things in it. So I decided to hack together my own code editor to demonstrate / try them.
 
 ## What is distinct about Breeze
 
@@ -48,8 +40,7 @@ than traditional CLI ones. A fresh breeze in CLI terminal world.
 Kakoune seem very Vim-golf-centric. In Breeze the philosophy is slightly different.
 It doesn't matter to me in how many keystrokes one can perform certain editing operation.
 What matter to me most is predictable, natural, easy to use modal text edition. Muscle
-memory and rapid keypressing without having to pay much attention is what I am aiming for
-first.
+memory and rapid keypressing without having to pay much attention is what I am aiming for.
 
 
 ## Status and plans
