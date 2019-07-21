@@ -31,6 +31,8 @@ pub trait Mode {
         action::no_actions()
     }
 
+    fn on_enter(&mut self, _state: &State) {}
+
     fn handle(&mut self, state: &mut State, key: Key);
 
     fn render(&self, state: &State, render: &mut dyn Renderer) {
@@ -38,16 +40,17 @@ pub trait Mode {
     }
 }
 
-fn default_render(
-    mode: &(impl Mode + ?Sized),
-    state: &State,
-    mut render: &mut dyn Renderer,
-) -> (Rect, Rect) {
+fn default_render_split_status_rect(render: &mut dyn Renderer) -> (Rect, Rect) {
     let total_rect = render.dimensions_rect();
-    let style = render.color_map().default;
-    let (buffer_rect, status_rect) = total_rect.split_horizontaly_at(-1);
-    state.render_buffer(&mut buffer_rect.to_renderer(&mut render));
+    total_rect.split_horizontaly_at(-1)
+}
 
+fn default_render_status(
+    mode: &(impl Mode + ?Sized),
+    mut render: &mut dyn Renderer,
+    status_rect: Rect,
+) {
+    let style = render.color_map().default;
     let mut status_view = status_rect.to_renderer(&mut render);
     status_view.print(
         render::Coord {
@@ -57,6 +60,17 @@ fn default_render(
         mode.name4(),
         style,
     );
+}
+
+fn default_render(
+    mode: &(impl Mode + ?Sized),
+    state: &State,
+    mut render: &mut dyn Renderer,
+) -> (Rect, Rect) {
+    let (buffer_rect, status_rect) = default_render_split_status_rect(render);
+    state.render_buffer(&mut buffer_rect.to_renderer(&mut render));
+
+    default_render_status(mode, render, status_rect);
 
     (buffer_rect, status_rect)
 }

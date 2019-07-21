@@ -86,7 +86,6 @@ pub struct State {
     mode: Option<Box<dyn Mode + 'static>>,
     pub(crate) yanked: Vec<Rope>,
 
-    pub(crate) find_result: Option<PathBuf>,
     pub(crate) msg: Option<String>,
 
     pub(crate) read_handler: Arc<Fn(&Path) -> io::Result<Rope>>,
@@ -109,7 +108,10 @@ impl State {
     pub(crate) fn set_mode(&mut self, mode: impl Mode + 'static) {
         self.cur_buffer_state_mut_opt()
             .map(|b| b.maybe_commit_undo_point());
-        self.mode = Some(Box::new(mode) as Box<dyn Mode>);
+        self.mode = None;
+        let mut mode = Box::new(mode) as Box<dyn Mode>;
+        mode.on_enter(self);
+        self.mode = Some(mode);
     }
 
     pub fn get_mode(&self) -> &(dyn Mode + 'static) {
@@ -122,11 +124,11 @@ impl State {
     }
     */
 
-    pub fn open_buffer(&mut self, path: PathBuf) {
+    pub fn open_buffer(&mut self, path: &Path) {
         let mut found = None;
 
         for (i, buffer_state) in self.buffers.iter() {
-            if buffer_state.path.as_ref() == Some(&path) {
+            if buffer_state.path.as_ref().map(|p| p.as_path()) == Some(path) {
                 found = Some(i);
                 break;
             }
@@ -137,7 +139,7 @@ impl State {
             return;
         }
 
-        let rope = match (self.read_handler)(&path) {
+        let rope = match (self.read_handler)(path) {
             Err(e) => {
                 self.msg = Some(format!("{}", e));
                 return;
@@ -149,7 +151,7 @@ impl State {
 
         self.cur_buffer_i = Some(entry.key());
         entry.insert(BufferState {
-            path: Some(path),
+            path: Some(path.to_owned()),
             buffer: Buffer::from_text(rope),
             ..default()
         });
@@ -464,7 +466,6 @@ impl Default for State {
             quit: false,
             mode: Some(Box::new(mode::Normal::default())),
             yanked: vec![],
-            find_result: None,
             msg: None,
 
             buffers: Slab::new(),

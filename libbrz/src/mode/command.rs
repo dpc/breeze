@@ -70,7 +70,7 @@ impl Command {
             }
             "e" => {
                 for s in &cmd[1..] {
-                    state.open_buffer(PathBuf::from(s))
+                    state.open_buffer(&PathBuf::from(s))
                 }
             }
             "db" => {
