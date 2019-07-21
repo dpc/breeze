@@ -8,34 +8,35 @@ impl Mode for Insert {
         "insert"
     }
     fn handle(&mut self, state: &mut State, key: Key) {
+        let buffer = state.cur_buffer_mut();
         match key {
             Key::Esc => {
                 state.set_mode(Normal::default());
             }
             Key::Char('\n') => {
-                state.cur_buffer_mut().insert_enter();
+                buffer.insert_enter();
             }
             Key::Char('\t') => {
-                state.cur_buffer_mut().insert_tab();
+                buffer.insert_tab();
             }
             Key::Backspace => {
-                state.cur_buffer_mut().backspace();
+                buffer.backspace();
             }
             Key::Left => {
-                state.cur_buffer_mut().move_cursor_backward(1);
+                buffer.move_cursor_backward(1);
             }
             Key::Right => {
-                state.cur_buffer_mut().move_cursor_forward(1);
+                buffer.move_cursor_forward(1);
             }
             Key::Up => {
-                state.cur_buffer_mut().move_cursor_up(1);
+                buffer.move_cursor_up(1);
             }
             Key::Down => {
-                state.cur_buffer_mut().move_cursor_down(1);
+                buffer.move_cursor_down(1);
             }
             Key::Char(ch) => {
                 if !ch.is_control() {
-                    state.cur_buffer_mut().insert_char(ch);
+                    buffer.insert_char(ch);
                 }
             }
             _ => {}

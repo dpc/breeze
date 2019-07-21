@@ -147,7 +147,7 @@ impl Render {
     pub fn new() -> Result<Self> {
         let screen = AlternateScreen::from(std::io::stdout().into_raw_mode().unwrap());
         let color_map = render::ColorMap {
-            reset: render::Style::default(),
+            default: render::Style::default(),
             line_num: render::Style {
                 fg: Some(10),
                 ..Default::default()
@@ -219,7 +219,7 @@ impl Render {
         buf.reset_all()?;
 
         let buf = buf.into_vec();
-        dbg!(buf.len());
+        buf.len();
 
         self.screen.write_all(&buf)?;
         self.screen.flush()?;

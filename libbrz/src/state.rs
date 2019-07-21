@@ -94,7 +94,7 @@ pub struct State {
     pub(crate) find_handler: Arc<Fn(&str) -> io::Result<Vec<PathBuf>>>,
 
     buffers: Slab<BufferState>,
-    cur_buffer_i: usize,
+    cur_buffer_i: Option<usize>,
 }
 
 impl State {
@@ -107,7 +107,8 @@ impl State {
     }
 
     pub(crate) fn set_mode(&mut self, mode: impl Mode + 'static) {
-        self.cur_buffer_state_mut().maybe_commit_undo_point();
+        self.cur_buffer_state_mut_opt()
+            .map(|b| b.maybe_commit_undo_point());
         self.mode = Some(Box::new(mode) as Box<dyn Mode>);
     }
 
@@ -132,7 +133,7 @@ impl State {
         }
 
         if let Some(found) = found {
-            self.cur_buffer_i = found;
+            self.cur_buffer_i = Some(found);
             return;
         }
 
@@ -146,7 +147,7 @@ impl State {
 
         let entry = self.buffers.vacant_entry();
 
-        self.cur_buffer_i = entry.key();
+        self.cur_buffer_i = Some(entry.key());
         entry.insert(BufferState {
             path: Some(path),
             buffer: Buffer::from_text(rope),
@@ -170,41 +171,52 @@ impl State {
     }
 
     fn try_write_buffer(&self, path: &Path) -> io::Result<()> {
-        (self.write_handler)(path, &self.buffers[self.cur_buffer_i].buffer.text)
-    }
+        if let Some(cur_buffer_i) = self.cur_buffer_i {
+            (self.write_handler)(path, &self.buffers[cur_buffer_i].buffer.text)?;
+        }
 
-    pub fn open_scratch_buffer(&mut self) {
-        self.buffers.insert(default());
+        Ok(())
     }
 
     pub fn delete_buffer(&mut self) {
-        self.buffers.remove(self.cur_buffer_i);
-        if self.buffers.is_empty() {
-            self.open_scratch_buffer();
+        if let Some(cur_buffer_i) = self.cur_buffer_i {
+            self.buffers.remove(cur_buffer_i);
+            self.buffer_next()
         }
-        self.buffer_next()
     }
 
     pub fn buffer_next(&mut self) {
-        loop {
-            self.cur_buffer_i += 1;
-            self.cur_buffer_i %= self.buffers.capacity();
-            if self.buffers.contains(self.cur_buffer_i) {
-                break;
+        if !self.buffers.is_empty() {
+            let mut cur_buffer_i = self.cur_buffer_i.expect("cur_buffer_i set");
+            loop {
+                cur_buffer_i += 1;
+                cur_buffer_i %= self.buffers.capacity();
+                if self.buffers.contains(cur_buffer_i) {
+                    self.cur_buffer_i = Some(cur_buffer_i);
+                    break;
+                }
             }
+        } else {
+            self.cur_buffer_i = None;
         }
     }
 
     pub fn buffer_prev(&mut self) {
-        loop {
-            if self.cur_buffer_i == 0 {
-                self.cur_buffer_i = self.buffers.capacity() - 1;
-            } else {
-                self.cur_buffer_i -= 1;
+        if !self.buffers.is_empty() {
+            let mut cur_buffer_i = self.cur_buffer_i.expect("cur_buffer_i set");
+            loop {
+                if cur_buffer_i == 0 {
+                    cur_buffer_i = self.buffers.capacity() - 1;
+                } else {
+                    cur_buffer_i -= 1;
+                }
+                if self.buffers.contains(cur_buffer_i) {
+                    self.cur_buffer_i = Some(cur_buffer_i);
+                    break;
+                }
             }
-            if self.buffers.contains(self.cur_buffer_i) {
-                break;
-            }
+        } else {
+            self.cur_buffer_i = None;
         }
     }
 
@@ -223,21 +235,38 @@ impl State {
         }
     }
 
+    pub fn cur_buffer_opt(&self) -> Option<&Buffer> {
+        self.cur_buffer_i.map(|i| &self.buffers[i].buffer)
+    }
+
+    pub fn cur_buffer_mut_opt(&mut self) -> Option<&mut Buffer> {
+        self.cur_buffer_i.map(move |i| &mut self.buffers[i].buffer)
+    }
+
     pub fn cur_buffer(&self) -> &Buffer {
-        &self.buffers[self.cur_buffer_i].buffer
+        self.cur_buffer_opt().expect("cur_buffer set")
     }
 
     pub fn cur_buffer_mut(&mut self) -> &mut Buffer {
-        &mut self.buffers[self.cur_buffer_i].buffer
+        self.cur_buffer_mut_opt().expect("cur_buffer set")
+    }
+
+    pub fn cur_buffer_state_opt(&self) -> Option<&BufferState> {
+        self.cur_buffer_i.map(|i| &self.buffers[i])
+    }
+
+    pub fn cur_buffer_state_mut_opt(&mut self) -> Option<&mut BufferState> {
+        self.cur_buffer_i.map(move |i| &mut self.buffers[i])
     }
 
     pub fn cur_buffer_state(&self) -> &BufferState {
-        &self.buffers[self.cur_buffer_i]
+        self.cur_buffer_state_opt().expect("cur_buffer set")
     }
 
     pub fn cur_buffer_state_mut(&mut self) -> &mut BufferState {
-        &mut self.buffers[self.cur_buffer_i]
+        self.cur_buffer_state_mut_opt().expect("cur_buffer set")
     }
+
     pub fn mode_name(&self) -> &str {
         self.mode.as_ref().expect("mode set").name()
     }
@@ -262,8 +291,13 @@ impl State {
     }
 
     pub fn render_buffer(&self, mut render: &mut dyn Renderer) {
-        let dims = render.dimensions();
+        if self.cur_buffer_opt().is_none() {
+            self.render_splash(render);
+            return;
+        }
+
         let buffer = self.cur_buffer();
+        let dims = render.dimensions();
 
         let window_height = dims.y;
         let window_margin = window_height / 4;
@@ -307,7 +341,7 @@ impl State {
             let line_str = format!("{} ", line.to_string());
             render.print(
                 render::Coord {
-                    x: dbg!(width) - dbg!(line_str.len()),
+                    x: width - line_str.len(),
                     y: line - start_line,
                 },
                 &line_str,
@@ -315,6 +349,7 @@ impl State {
             );
         }
     }
+
     pub fn render_content(&self, render: &mut dyn Renderer, start_line: usize) {
         let buffer = self.cur_buffer();
         let window_dims = render.dimensions();
@@ -344,7 +379,7 @@ impl State {
 
             let visual_selection = buffer.idx_selection_type(Idx(cur_ch_idx));
 
-            let style = color_map.reset;
+            let style = color_map.default;
 
             let (visual_ch, visual_ch_width, special) = match ch {
                 '\n' => {
@@ -402,9 +437,14 @@ impl State {
 
     pub fn render_splash(&self, render: &mut dyn Renderer) {
         let center = render.dimensions().center();
-        let style = render.color_map().default_style();
-        render.print(center, "HELLO WORLD", style);
-        render.set_cursor(Some(center));
+        let style = render.color_map().default;
+        render.print_centered(
+            center.sub_y(1),
+            &format!("Breeze v{}", env!("CARGO_PKG_VERSION")),
+            style,
+        );
+        render.print_centered(center.add_y(1), "by Dawid Ciężarkiewicz", style);
+        render.set_cursor(None);
     }
 }
 
@@ -420,7 +460,7 @@ impl Default for BufferState {
 }
 impl Default for State {
     fn default() -> Self {
-        let mut s = State {
+        State {
             quit: false,
             mode: Some(Box::new(mode::Normal::default())),
             yanked: vec![],
@@ -428,7 +468,7 @@ impl Default for State {
             msg: None,
 
             buffers: Slab::new(),
-            cur_buffer_i: 0,
+            cur_buffer_i: None,
 
             read_handler: Arc::new(|_path| {
                 Err(io::Error::new(
@@ -448,11 +488,6 @@ impl Default for State {
                     "handler not registered",
                 ))
             }),
-        };
-
-        s.open_scratch_buffer();
-        s.buffer_next();
-
-        s
+        }
     }
 }

@@ -15,6 +15,19 @@ impl Mode for Normal {
     }
 
     fn handle(&mut self, state: &mut State, key: Key) {
+        if state.cur_buffer_opt().is_none() {
+            match key {
+                Key::Char(':') => {
+                    state.set_mode(Command::new());
+                }
+                Key::Ctrl('p') => {
+                    state.set_mode(Find::default());
+                }
+                _ => {}
+            }
+            return;
+        }
+
         match key {
             Key::Char(n @ '0'..='9') => {
                 self.num_prefix = Some(
@@ -25,10 +38,14 @@ impl Mode for Normal {
                 );
             }
             other => {
-                state.cur_buffer_state_mut().maybe_commit_undo_point();
+                state
+                    .cur_buffer_state_mut_opt()
+                    .map(|b| b.maybe_commit_undo_point());
                 self.handle_not_digit(state, other);
                 self.num_prefix = None;
-                state.cur_buffer_state_mut().maybe_commit_undo_point();
+                state
+                    .cur_buffer_state_mut_opt()
+                    .map(|b| b.maybe_commit_undo_point());
             }
         }
     }
@@ -57,10 +74,11 @@ impl Normal {
 
     fn handle_not_digit_not_undo(&self, state: &mut State, key: Key) -> bool {
         let times = self.num_prefix.unwrap_or(1);
+        let buffer = state.cur_buffer_mut();
         match key {
             Key::Esc => {}
             Key::Char(' ') => {
-                state.cur_buffer_mut().collapse();
+                buffer.collapse();
             }
             Key::Char(':') => {
                 state.set_mode(Command::new());

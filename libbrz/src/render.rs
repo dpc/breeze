@@ -25,33 +25,27 @@ impl Style {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct Coord {
-    pub x: usize,
-    pub y: usize,
-}
-
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ColorMap {
-    pub reset: Style,
+    pub default: Style,
     pub line_num: Style,
     pub direction_marker: Style,
     pub selection: Style,
     pub special: Style,
 }
 
-impl ColorMap {
-    pub fn default_style(&self) -> Style {
-        self.reset
-    }
+#[derive(Copy, Clone, Debug)]
+pub struct Coord {
+    pub x: usize,
+    pub y: usize,
 }
 
 impl std::ops::Add<Coord> for Coord {
     type Output = Self;
     fn add(self, other: Self) -> Self {
         Coord {
-            y: self.y + other.y,
             x: self.x + other.x,
+            y: self.y + other.y,
         }
     }
 }
@@ -62,8 +56,18 @@ impl Coord {
         self
     }
 
+    pub fn sub_x(mut self, x: usize) -> Coord {
+        self.x = self.x.saturating_sub(x);
+        self
+    }
+
     pub fn add_y(mut self, y: usize) -> Coord {
         self.y = self.y.saturating_add(y);
+        self
+    }
+
+    pub fn sub_y(mut self, y: usize) -> Coord {
+        self.y = self.y.saturating_sub(y);
         self
     }
 
@@ -103,6 +107,11 @@ pub trait Renderer {
             }
             self.put(coord, ch, style);
         }
+    }
+    fn print_centered(&mut self, coord: Coord, text: &str, style: Style) {
+        let len = text.len();
+        let coord = coord.sub_x(len / 2);
+        self.print(coord, text, style);
     }
 
     fn set_cursor(&mut self, coord: Option<Coord>);

@@ -38,6 +38,17 @@ impl Mode for Command {
             _ => {}
         }
     }
+
+    fn render(&self, state: &State, mut render: &mut dyn Renderer) {
+        let (_, status_rect) = super::default_render(self, state, render);
+        let style = render.color_map().default;
+        let mut status_view = status_rect.to_renderer(&mut render);
+        status_view.print(
+            render::Coord { x: 0, y: 0 },
+            &format!(":{}", self.cmd),
+            style,
+        );
+    }
 }
 
 impl Command {
