@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::{coord::*, idx::*, prelude::*, selection::*, util::char};
+use crate::{idx::*, position::*, prelude::*, selection::*, util::char};
 use ropey::Rope;
 use std::cell::RefCell;
 use std::cmp::min;
@@ -77,8 +77,8 @@ impl SelectionSet {
         let mut lines = BTreeSet::new();
         for s in &self.selections {
             let (from, to) = s.sorted_pair();
-            let to = std::cmp::max(from, to.backward(text)).to_coord(text);
-            let from = from.to_coord(text);
+            let to = std::cmp::max(from, to.backward(text)).to_position(text);
+            let from = from.to_position(text);
             for line in from.line..=to.line {
                 lines.insert(line);
             }
@@ -132,7 +132,7 @@ impl SelectionSet {
             self.cursor_column = self
                 .selections
                 .iter()
-                .map(|s| s.cursor.to_coord(text).column)
+                .map(|s| s.cursor.to_position(text).column)
                 .collect();
         }
     }
@@ -318,7 +318,7 @@ impl Buffer {
 
         if self.expand_tabs {
             let mut insertions = self.map_each_selection(|sel, text| {
-                let v_col = self.to_visual(sel.cursor.to_coord(text)).column;
+                let v_col = self.to_visual(sel.cursor.to_position(text)).column;
 
                 (sel.cursor, distance_to_next_tabstop(v_col, self.tabstop))
             });
@@ -494,7 +494,7 @@ impl Buffer {
         self.selection.clear_cursor_column();
         if self.expand_tabs {
             let mut removal = self.map_each_selection(|sel, text| {
-                let v_col = self.to_visual(sel.cursor.to_coord(text)).column;
+                let v_col = self.to_visual(sel.cursor.to_position(text)).column;
 
                 (
                     sel.cursor,
@@ -602,10 +602,10 @@ impl Buffer {
 
     pub fn move_cursor_coord<F>(&mut self, f: F)
     where
-        F: Fn(Coord, &Rope) -> Coord,
+        F: Fn(Position, &Rope) -> Position,
     {
         self.map_each_selection_mut(|sel, text| {
-            let new_cursor = f(sel.cursor.to_coord(text), text);
+            let new_cursor = f(sel.cursor.to_position(text), text);
             sel.anchor = sel.cursor;
             sel.cursor = new_cursor.to_idx(text);
         });
@@ -613,10 +613,10 @@ impl Buffer {
 
     pub fn extend_cursor_coord<F>(&mut self, f: F)
     where
-        F: Fn(Coord, &Rope) -> Coord,
+        F: Fn(Position, &Rope) -> Position,
     {
         self.map_each_selection_mut(|sel, text| {
-            sel.cursor = f(sel.cursor.to_coord(text), text).to_idx(text);
+            sel.cursor = f(sel.cursor.to_position(text), text).to_idx(text);
         });
     }
     pub fn move_cursor_backward(&mut self, n: usize) {
@@ -670,8 +670,8 @@ impl Buffer {
         self.move_cursor_2(Idx::backward_word)
     }
 
-    pub fn cursor_coord(&self) -> Coord {
-        self.selection.selections[0].cursor.to_coord(&self.text)
+    pub fn cursor_coord(&self) -> Position {
+        self.selection.selections[0].cursor.to_position(&self.text)
     }
 
     pub fn move_line(&mut self) {
@@ -689,7 +689,7 @@ impl Buffer {
 
             (
                 cursor.forward_past_line_end(text),
-                if anchor.to_coord(text).column == 0 {
+                if anchor.to_position(text).column == 0 {
                     anchor
                 } else {
                     anchor.backward_to_line_start(text)
@@ -726,7 +726,7 @@ impl Buffer {
         }
     }
 
-    pub fn to_visual(&self, coord: Coord) -> Coord {
+    pub fn to_visual(&self, coord: Position) -> Position {
         let line = self.text.line(coord.line);
         let v_col = line.slice(..coord.column).chars().fold(0, |v_col, ch| {
             if ch == '\t' {
@@ -736,7 +736,7 @@ impl Buffer {
             }
         });
 
-        Coord {
+        Position {
             line: coord.line,
             column: v_col,
         }
@@ -746,7 +746,7 @@ impl Buffer {
         let affected_lines = self.selection.to_lines(&self.text);
         let mut insertions: Vec<_> = affected_lines
             .into_iter()
-            .map(|line| Coord { line, column: 0 }.to_idx(&self.text))
+            .map(|line| Position { line, column: 0 }.to_idx(&self.text))
             .collect();
 
         insertions.sort_by_key(|insertion| insertion.0);
@@ -777,7 +777,7 @@ impl Buffer {
 
         let mut removals: Vec<_> = affected_lines
             .into_iter()
-            .map(|line| Coord { line, column: 0 }.to_idx(&self.text))
+            .map(|line| Position { line, column: 0 }.to_idx(&self.text))
             .collect();
 
         removals.sort_by_key(|insertion| insertion.0);

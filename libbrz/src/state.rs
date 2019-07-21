@@ -7,7 +7,7 @@ use default::default;
 use ropey::Rope;
 
 use crate::render::{self, Renderer};
-use crate::{buffer, coord};
+use crate::{buffer, position};
 use std::cmp::min;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -322,7 +322,7 @@ impl State {
 
         let color_map = { render.color_map().to_owned() };
 
-        let mut cur_ch_idx = coord::Coord {
+        let mut cur_ch_idx = position::Position {
             line: start_line,
             column: 0,
         }
@@ -357,7 +357,7 @@ impl State {
                 '\t' => (
                     Some('.'),
                     buffer::distance_to_next_tabstop(
-                        Idx(cur_ch_idx).to_coord(&buffer.text).column,
+                        Idx(cur_ch_idx).to_position(&buffer.text).column,
                         4,
                     ),
                     false,

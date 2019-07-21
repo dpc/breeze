@@ -1,6 +1,6 @@
 use ropey::Rope;
 
-use crate::coord::*;
+use crate::position::*;
 use crate::range::Range;
 use crate::util::char;
 
@@ -48,8 +48,8 @@ impl Idx {
     pub fn forward(self, text: &Rope) -> Self {
         self.forward_n(1, text)
     }
-    pub fn to_coord(self, text: &Rope) -> Coord {
-        Coord::from_idx(self, text)
+    pub fn to_position(self, text: &Rope) -> Position {
+        Position::from_idx(self, text)
     }
 
     pub fn prev_char(self, text: &Rope) -> Option<char> {
@@ -126,7 +126,7 @@ impl Idx {
     }
 
     pub fn down_unaligned(self, n: usize, column: Option<usize>, text: &Rope) -> Self {
-        let mut coord = self.to_coord(text);
+        let mut coord = self.to_position(text);
         coord.line = coord.line.saturating_add(n);
         if let Some(column) = column {
             coord.column = column;
@@ -135,7 +135,7 @@ impl Idx {
     }
 
     pub fn up_unaligned(self, n: usize, column: Option<usize>, text: &Rope) -> Self {
-        let mut coord = self.to_coord(text);
+        let mut coord = self.to_position(text);
         coord.line = coord.line.saturating_sub(n);
         if let Some(column) = column {
             coord.column = column;

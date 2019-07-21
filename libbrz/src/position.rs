@@ -4,12 +4,12 @@ use crate::idx::*;
 use std::cmp::min;
 
 #[derive(Copy, Clone, Debug, Default, PartialOrd, PartialEq, Eq, Ord)]
-pub struct Coord {
+pub struct Position {
     pub line: usize,
     pub column: usize,
 }
 
-impl Coord {
+impl Position {
     pub fn map_as_idx<F>(self, text: &Rope, f: F) -> Self
     where
         F: FnOnce(Idx) -> Idx,
@@ -41,7 +41,7 @@ impl Coord {
     }
 
     pub fn up_unaligned(self, n: usize, _text: &Rope) -> Self {
-        Self {
+        Position {
             line: self.line.saturating_sub(n),
             column: self.column,
         }
@@ -56,7 +56,7 @@ impl Coord {
     ///
     /// Column in the `Coord` can actually exeed the actual column,
     /// which is useful eg. for consecutive up and down movements
-    pub fn trim_column_to_buf(self, text: &Rope) -> Coord {
+    pub fn trim_column_to_buf(self, text: &Rope) -> Position {
         let line = text.line(self.line);
         let line_len = line.len_chars();
         let trimed_column = if line_len == 0 {
@@ -67,14 +67,14 @@ impl Coord {
             std::cmp::min(self.column, line_len - 1)
         };
 
-        Coord {
+        Position {
             line: self.line,
             column: trimed_column,
         }
     }
 
     pub fn trim_line_to_buf(self, text: &Rope) -> Self {
-        Self {
+        Position {
             column: self.column,
             line: min(self.line, text.len_lines().saturating_sub(1)),
         }
@@ -85,7 +85,7 @@ impl Coord {
         let line_start_pos = text.line_to_char(line);
         let column = idx.0 - line_start_pos;
 
-        Self { line, column }
+        Position { line, column }
     }
 
     pub fn forward(self, n: usize, text: &Rope) -> Self {

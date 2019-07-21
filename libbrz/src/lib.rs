@@ -2,9 +2,9 @@
 
 pub mod action;
 pub mod buffer;
-pub mod coord;
 pub mod idx;
 pub mod mode;
+pub mod position;
 pub mod range;
 pub mod selection;
 
@@ -13,9 +13,9 @@ pub mod render;
 pub mod state;
 pub mod util;
 
-pub use self::coord::Coord;
 pub use self::idx::Idx;
 pub use self::mode::Mode;
+pub use self::position::Position;
 pub use self::state::State;
 use std::fmt;
 

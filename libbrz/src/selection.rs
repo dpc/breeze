@@ -1,13 +1,13 @@
-use crate::{coord::*, idx::*};
+use crate::{idx::*, position::*};
 use ropey::Rope;
 
-/// Selection with `Coord`
+/// Selection with `Position`
 ///
 /// An ordererd pair of indices in the buffer
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SelectionUnaligned {
-    pub anchor: Coord,
-    pub cursor: Coord,
+    pub anchor: Position,
+    pub cursor: Position,
     pub was_forward: bool,
 }
 
@@ -25,7 +25,7 @@ impl SelectionUnaligned {
         self
     }
 
-    pub fn sorted(self) -> (Coord, Coord) {
+    pub fn sorted(self) -> (Position, Position) {
         if self.anchor.line < self.cursor.line {
             (self.anchor, self.cursor)
         } else if self.cursor.line < self.anchor.line {
@@ -77,8 +77,8 @@ impl SelectionUnaligned {
 
     pub fn from_selection(sel: Selection, text: &Rope) -> Self {
         Self {
-            cursor: sel.cursor.to_coord(text),
-            anchor: sel.anchor.to_coord(text),
+            cursor: sel.cursor.to_position(text),
+            anchor: sel.anchor.to_position(text),
             was_forward: sel.was_forward,
         }
     }
