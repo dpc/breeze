@@ -17,9 +17,10 @@ pub use self::idx::Idx;
 pub use self::mode::Mode;
 pub use self::position::Position;
 pub use self::state::State;
+use std::cmp;
 use std::fmt;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum Key {
     /// Backspace.
     Backspace,
@@ -64,16 +65,62 @@ pub enum Key {
     __IsNotComplete,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct NaturalyOrderedKey(pub Key);
+
 impl fmt::Display for Key {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use self::Key::*;
         match *self {
-            F(u) => write!(f, "f{}", u),
-            Char(c) => write!(f, "{}", c),
-            Alt(c) => write!(f, "a-{}", c),
-            Ctrl(c) => write!(f, "c-{}", c),
-            Esc => write!(f, "esc"),
-            _ => write!(f, "?"),
+            F(c) => f.pad(&format!("f{}", c)),
+            Char(c) => f.pad(&format!("{}", c)),
+            Alt(c) => f.pad(&format!("a-{}", c)),
+            Ctrl(c) => f.pad(&format!("c-{}", c)),
+            Esc => f.pad("esc"),
+            _ => f.pad("?"),
         }
+    }
+}
+
+impl NaturalyOrderedKey {
+    fn ordering_keys(self) -> (usize, char, usize) {
+        use self::Key::*;
+        match self.0 {
+            F(c) => (9, ('0' as u8 + c) as char, 0),
+            Char(c) => (
+                1,
+                c.to_ascii_lowercase(),
+                1 + c.is_ascii_uppercase() as usize,
+            ),
+            Ctrl(c) => (
+                1,
+                c.to_ascii_lowercase(),
+                3 + c.is_ascii_uppercase() as usize,
+            ),
+            Alt(c) => (
+                1,
+                c.to_ascii_lowercase(),
+                5 + c.is_ascii_uppercase() as usize,
+            ),
+            Esc => (0, '\0', 0),
+            _ => (10, '?', 0),
+        }
+    }
+}
+
+impl cmp::Ord for NaturalyOrderedKey {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        let (s_group, s_key, s_mod) = self.ordering_keys();
+        let (o_group, o_key, o_mod) = other.ordering_keys();
+        s_group
+            .cmp(&o_group)
+            .then(s_key.cmp(&o_key))
+            .then(s_mod.cmp(&o_mod))
+            .then(self.0.cmp(&other.0))
+    }
+}
+impl cmp::PartialOrd for NaturalyOrderedKey {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }

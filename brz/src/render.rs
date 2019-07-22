@@ -148,6 +148,11 @@ impl Render {
         let screen = AlternateScreen::from(std::io::stdout().into_raw_mode().unwrap());
         let color_map = render::ColorMap {
             default: render::Style::default(),
+            actions: render::Style {
+                fg: Some(8),
+                bg: Some(14),
+                ..Default::default()
+            },
             line_num: render::Style {
                 fg: Some(10),
                 ..Default::default()

@@ -28,6 +28,7 @@ impl Style {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ColorMap {
     pub default: Style,
+    pub actions: Style,
     pub line_num: Style,
     pub direction_marker: Style,
     pub selection: Style,
@@ -97,6 +98,13 @@ pub trait Renderer {
         }
     }
     fn put(&mut self, coord: Coord, ch: char, style: Style);
+    fn fill(&mut self, rect: Rect, ch: char, style: Style) {
+        for y in rect.offset.y..rect.offset.y + rect.dimensions.y {
+            for x in rect.offset.x..rect.offset.x + rect.dimensions.x {
+                self.put(Coord { x, y }, ch, style);
+            }
+        }
+    }
 
     fn print(&mut self, coord: Coord, text: &str, style: Style) {
         let dims = self.dimensions();
@@ -142,6 +150,14 @@ pub struct Rect {
 }
 
 impl Rect {
+    pub fn split_verticaly(self) -> (Rect, Rect) {
+        self.split_verticaly_at((self.dimensions.x / 2) as isize)
+    }
+
+    pub fn split_horizontaly(self) -> (Rect, Rect) {
+        self.split_horizontaly_at((self.dimensions.y / 2) as isize)
+    }
+
     pub fn split_verticaly_at(self, x: isize) -> (Rect, Rect) {
         let x = if x < 0 {
             (self.dimensions.x as isize + x) as usize

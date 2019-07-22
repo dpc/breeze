@@ -2,7 +2,7 @@ use super::*;
 
 use crate::action;
 use crate::state::State;
-use crate::Key;
+use crate::NaturalyOrderedKey;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Normal {
@@ -79,9 +79,6 @@ impl Normal {
             Key::Esc => {}
             Key::Char(' ') => {
                 buffer.collapse();
-            }
-            Key::Char(':') => {
-                state.set_mode(Command::new());
             }
             Key::Ctrl('p') => {
                 state.set_mode(Find::default());
@@ -177,35 +174,14 @@ impl Normal {
             Key::Char('\'') | Key::Alt(';') => {
                 state.cur_buffer_mut().reverse_selections();
             }
-            Key::Ctrl('d') => {
-                state.cur_buffer_mut().move_cursor_down(25);
-            }
-            Key::Ctrl('D') => {
-                state.cur_buffer_mut().extend_cursor_down(25);
-            }
-            Key::Ctrl('u') => {
-                state.cur_buffer_mut().move_cursor_up(25);
-            }
-            Key::Ctrl('U') => {
-                state.cur_buffer_mut().extend_cursor_up(25);
-            }
             Key::Char('>') => {
                 state.cur_buffer_mut().increase_indent(times);
             }
             Key::Char('<') => {
                 state.cur_buffer_mut().decrease_indent(times);
             }
-            Key::Ctrl('P') => {
-                state.set_mode(Find::default());
-            }
-            Key::Char('A') => {
-                state
-                    .cur_buffer_mut()
-                    .extend_cursor(Idx::forward_to_line_end);
-                state.set_mode(Insert);
-            }
             key => {
-                if let Some(action) = action::normal::all_actions().get(&key) {
+                if let Some(action) = action::normal::all_actions().get(&NaturalyOrderedKey(key)) {
                     action.execute(state);
                 } else {
                     return false;

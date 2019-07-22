@@ -6,8 +6,9 @@ use crate::Key;
 use default::default;
 use ropey::Rope;
 
-use crate::render::{self, Renderer};
+use crate::render::{self, Coord, Renderer};
 use crate::{buffer, position};
+use std::cell::RefCell;
 use std::cmp::min;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -94,6 +95,8 @@ pub struct State {
 
     buffers: Slab<BufferState>,
     cur_buffer_i: Option<usize>,
+
+    pub last_visual_cursor_coord: RefCell<Option<Coord>>,
 }
 
 impl State {
@@ -431,10 +434,12 @@ impl State {
             cur_ch_idx += 1;
         }
 
-        render.set_cursor(Some(render::Coord {
+        let visual_cursor_coord = render::Coord {
             y: cursor_coord.line.saturating_sub(start_line),
             x: cursor_coord.column,
-        }));
+        };
+        *self.last_visual_cursor_coord.borrow_mut() = Some(visual_cursor_coord);
+        render.set_cursor(Some(visual_cursor_coord));
     }
 
     pub fn render_splash(&self, render: &mut dyn Renderer) {
@@ -446,6 +451,7 @@ impl State {
             style,
         );
         render.print_centered(center.add_y(1), "by Dawid Ciężarkiewicz", style);
+        *self.last_visual_cursor_coord.borrow_mut() = None;
         render.set_cursor(None);
     }
 }
@@ -489,6 +495,7 @@ impl Default for State {
                     "handler not registered",
                 ))
             }),
+            last_visual_cursor_coord: RefCell::new(None),
         }
     }
 }

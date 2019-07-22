@@ -4,11 +4,11 @@ pub use super::State;
 pub mod normal;
 
 pub use self::normal::all_actions;
-use crate::Key;
+use crate::NaturalyOrderedKey;
 use once_cell::sync::OnceCell;
 use std::collections::BTreeMap;
 
-pub type Map = BTreeMap<Key, Box<Action + Send + Sync + 'static>>;
+pub type Map = BTreeMap<NaturalyOrderedKey, Box<Action + Send + Sync + 'static>>;
 
 pub fn no_actions() -> &'static Map {
     static INSTANCE: OnceCell<Map> = OnceCell::new();
