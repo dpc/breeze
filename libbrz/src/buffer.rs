@@ -309,11 +309,11 @@ impl Buffer {
         self.map_each_selection_mut(|sel, _text| *sel = sel.reversed());
     }
 
-    pub fn insert_char(&mut self, ch: char) {
-        self.insert(&(ch.to_string()));
+    pub fn insert_char(&mut self, ch: char, extend: bool) {
+        self.insert(&(ch.to_string()), extend);
     }
 
-    pub fn insert_tab(&mut self) {
+    pub fn insert_tab(&mut self, extend: bool) {
         self.selection.clear_cursor_column();
 
         if self.expand_tabs {
@@ -327,25 +327,29 @@ impl Buffer {
             insertions.reverse();
 
             for (idx, n) in insertions {
-                self.selection.collapse();
+                if !extend {
+                    self.selection.collapse();
+                }
                 self.selection.sort();
                 self.selection.fix_on_insert(idx, n);
                 self.text.insert(idx.0, &" ".repeat(n));
             }
         } else {
-            self.insert_char('\t');
+            self.insert_char('\t', extend);
         }
     }
 
-    pub fn insert(&mut self, s: &str) {
+    pub fn insert(&mut self, s: &str, extend: bool) {
         self.selection.clear_cursor_column();
 
         let mut insertion_points = self.map_each_selection_mut(|sel, _text| sel.cursor);
         insertion_points.sort();
         insertion_points.reverse();
 
-        self.selection.collapse();
-        self.selection.sort();
+        if !extend {
+            self.selection.collapse();
+            self.selection.sort();
+        }
 
         for idx in insertion_points {
             if !s.is_empty() {
@@ -355,15 +359,15 @@ impl Buffer {
         }
     }
 
-    pub fn insert_enter(&mut self) {
-        self.open_impl(true);
+    pub fn insert_enter(&mut self, extend: bool) {
+        self.open_impl(true, extend);
     }
 
     pub fn open(&mut self) {
-        self.open_impl(false);
+        self.open_impl(false, false);
     }
 
-    fn open_impl(&mut self, was_enter: bool) {
+    fn open_impl(&mut self, was_enter: bool, extend: bool) {
         self.selection.clear_cursor_column();
         let mut indents = self.map_each_enumerated_selection(|i, sel, text| {
             let line_begining = sel.cursor.backward_to_line_start(text);
@@ -381,7 +385,9 @@ impl Buffer {
         indents.sort_by_key(|&(_, _, insert_idx, _)| insert_idx);
         indents.reverse();
 
-        self.selection.collapse();
+        if !extend {
+            self.selection.collapse();
+        }
         for (i, (_, indent, insert_idx, increase_indent)) in indents.iter().enumerate() {
             let mut inserted_len = 0;
             self.text.insert(insert_idx.0, &indent.to_string());
@@ -397,7 +403,7 @@ impl Buffer {
             self.selection.fix_on_insert(*insert_idx, inserted_len);
             let sel = &mut self.selection.selections[indents[i].0];
             sel.cursor = insert_idx.forward_n(inserted_len, &self.text);
-            *sel = sel.collapsed();
+            *sel = if extend { *sel } else { sel.collapsed() };
         }
     }
 
@@ -490,7 +496,7 @@ impl Buffer {
         self.remove_ranges(removal_points);
     }
 
-    pub fn backspace(&mut self) {
+    pub fn backspace(&mut self, extend: bool) {
         self.selection.clear_cursor_column();
         if self.expand_tabs {
             let mut removal = self.map_each_selection(|sel, text| {
@@ -511,8 +517,10 @@ impl Buffer {
             removal.sort_by_key(|r| r.0);
             removal.reverse();
 
-            self.selection.collapse();
-            self.selection.sort();
+            if !extend {
+                self.selection.collapse();
+                self.selection.sort();
+            }
             for (idx, n) in removal {
                 let start = idx.backward_n(n, &self.text);
                 self.selection

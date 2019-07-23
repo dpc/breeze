@@ -133,11 +133,11 @@ impl Normal {
             }
             Key::Char('c') => {
                 state.yanked = state.cur_buffer_mut().delete();
-                state.set_mode(Insert);
+                state.set_mode(Insert::new_normal());
             }
             Key::Char('o') => {
                 state.cur_buffer_mut().open();
-                state.set_mode(Insert);
+                state.set_mode(Insert::new_normal());
             }
             Key::Char('y') => {
                 state.yanked = state.cur_buffer_mut().yank();

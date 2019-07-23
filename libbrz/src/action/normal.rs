@@ -28,7 +28,11 @@ action!(EnterCommandMode, "command mode", (state) {
 });
 
 action!(EnterInsertMode, "insert mode", (state) {
-    state.set_mode(mode::Insert);
+    state.set_mode(mode::Insert::new_normal());
+});
+
+action!(EnterInsertExtendMode, "insert extend mode", (state) {
+    state.set_mode(mode::Insert::new_extend());
 });
 
 action!(MoveDownPage, "move down page", (state) {
@@ -43,7 +47,14 @@ action!(LineAppend, "append to line", (state) {
     state
         .cur_buffer_mut()
         .extend_cursor(Idx::forward_to_line_end);
-    state.set_mode(mode::Insert);
+    state.set_mode(mode::Insert::new_normal());
+});
+
+action!(LineAppendExtend, "append to line (extend)", (state) {
+    state
+        .cur_buffer_mut()
+        .extend_cursor(Idx::forward_to_line_end);
+    state.set_mode(mode::Insert::new_extend());
 });
 action!(EnterOpenMode, "open mode", (state) {
     state.set_mode(mode::Find::default());
@@ -73,8 +84,10 @@ pub fn all_actions() -> &'static super::Map {
         let mut m = BTreeMap::new();
 
         action_key!(m, 'i', EnterInsertMode);
+        action_key!(m, 'I', EnterInsertExtendMode);
         action_key!(m, ':', EnterCommandMode);
-        action_key!(m, 'A', LineAppend);
+        action_key!(m, 'a', LineAppend);
+        action_key!(m, 'A', LineAppendExtend);
         action_ctrl_key!(m, 'p', EnterOpenMode);
         action_ctrl_key!(m, 'u', MoveUpPage);
         action_ctrl_key!(m, 'U', ExtendUpPage);
