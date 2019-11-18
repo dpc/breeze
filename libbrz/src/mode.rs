@@ -28,8 +28,29 @@ pub trait Mode {
     fn cmd_string(&self) -> Option<String> {
         None
     }
-    fn available_actions(&self) -> &action::Map {
-        action::no_actions()
+
+    fn action_mappings<'s>(&'s self) -> Box<dyn Iterator<Item = action::ActionByKey<'s>> + 's> {
+        let actions = self.actions();
+        Box::new(
+            self.key_mappings()
+                .into_iter()
+                .map(move |(key, action)| (key.0, &**actions.get(action).expect("action present"))),
+        )
+    }
+
+    fn key_mappings(&self) -> &action::KeyMappings {
+        action::empty_key_mappings()
+    }
+
+    fn actions(&self) -> &action::ActionsById {
+        action::empty_actions_by_id()
+    }
+
+    fn action_by_key(&self, key: super::Key) -> Option<action::ActionRef> {
+        self.key_mappings()
+            .get(&super::NaturalyOrderedKey(key))
+            .and_then(|name| self.actions().get(name))
+            .map(|boxed| &**boxed)
     }
 
     fn on_enter(&mut self, _state: &State) {}
@@ -85,7 +106,7 @@ fn default_render_available_actions(
     mut render: &mut dyn Renderer,
     buffer_rect: Rect,
 ) {
-    let actions = mode.available_actions();
+    let actions = mode.key_mappings();
 
     if actions.is_empty() {
         return;
@@ -121,10 +142,10 @@ fn default_render_available_actions(
         "available commands",
         style,
     );
-    for (i, action) in mode.available_actions().iter().enumerate().take(height) {
+    for (i, action) in mode.action_mappings().enumerate().take(height) {
         view.print(
             render::Coord { x: 0, y: i + 1 },
-            &format!("{:>3} {}", (action.0).0, action.1.help()),
+            &format!("{:>3} {}", (action.0), action.1.help()),
             style,
         );
     }

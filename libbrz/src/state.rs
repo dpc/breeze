@@ -89,9 +89,9 @@ pub struct State {
 
     pub(crate) msg: Option<String>,
 
-    pub(crate) read_handler: Arc<Fn(&Path) -> io::Result<Rope>>,
-    pub(crate) write_handler: Arc<Fn(&Path, &Rope) -> io::Result<()>>,
-    pub(crate) find_handler: Arc<Fn(&str) -> io::Result<Vec<PathBuf>>>,
+    pub(crate) read_handler: Arc<dyn Fn(&Path) -> io::Result<Rope>>,
+    pub(crate) write_handler: Arc<dyn Fn(&Path, &Rope) -> io::Result<()>>,
+    pub(crate) find_handler: Arc<dyn Fn(&str) -> io::Result<Vec<PathBuf>>>,
 
     buffers: Slab<BufferState>,
     cur_buffer_i: Option<usize>,

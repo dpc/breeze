@@ -23,76 +23,106 @@ macro_rules! action {
     };
 }
 
-action!(EnterCommandMode, "command mode", (state) {
-    state.set_mode(mode::Command::new());
-});
-
-action!(EnterInsertMode, "insert mode", (state) {
-    state.set_mode(mode::Insert::new_normal());
-});
-
-action!(EnterInsertExtendMode, "insert extend mode", (state) {
-    state.set_mode(mode::Insert::new_extend());
-});
-
-action!(MoveDownPage, "move down page", (state) {
-    state.cur_buffer_mut().move_cursor_down(25);
-});
-
-action!(ExtendDownPage, "extend down page", (state) {
-    state.cur_buffer_mut().extend_cursor_down(25);
-});
-
-action!(LineAppend, "append to line", (state) {
-    state
-        .cur_buffer_mut()
-        .extend_cursor(Idx::forward_to_line_end);
-    state.set_mode(mode::Insert::new_normal());
-});
-
-action!(LineAppendExtend, "append to line (extend)", (state) {
-    state
-        .cur_buffer_mut()
-        .extend_cursor(Idx::forward_to_line_end);
-    state.set_mode(mode::Insert::new_extend());
-});
-action!(EnterOpenMode, "open mode", (state) {
-    state.set_mode(mode::Find::default());
-});
-
-action!(MoveUpPage, "move up page", (state) {
-    state.cur_buffer_mut().move_cursor_up(25);
-});
-action!(ExtendUpPage, "extend up page", (state) {
-    state.cur_buffer_mut().extend_cursor_up(25);
-});
-
-macro_rules! action_key {
-    ($m:ident, $k:expr, $name:ident) => {
-        $m.insert(NaturalyOrderedKey(Key::Char($k)), Box::new($name) as Box<_>);
+macro_rules! actions {
+    ($m:ident) => {};
+    ($m:ident,) => {};
+    ($m:ident, {  $name:ident, $help:expr, ($state:ident) $body:block }, $($rest:tt)*) => {
+        action!($name, $help, ($state) $body);
+        $m.insert(stringify!($name), Box::new($name) as Box<_>);
+        actions!($m, $($rest)*);
     };
 }
 
-macro_rules! action_ctrl_key {
-    ($m:ident, $k:expr, $name:ident) => {
-        $m.insert(NaturalyOrderedKey(Key::Ctrl($k)), Box::new($name) as Box<_>);
-    };
-}
-pub fn all_actions() -> &'static super::Map {
-    static INSTANCE: OnceCell<super::Map> = OnceCell::new();
+pub fn actions() -> &'static super::ActionsById {
+    static INSTANCE: OnceCell<super::ActionsById> = OnceCell::new();
     INSTANCE.get_or_init(|| {
         let mut m = BTreeMap::new();
 
-        action_key!(m, 'i', EnterInsertMode);
-        action_key!(m, 'I', EnterInsertExtendMode);
-        action_key!(m, ':', EnterCommandMode);
-        action_key!(m, 'a', LineAppend);
-        action_key!(m, 'A', LineAppendExtend);
-        action_ctrl_key!(m, 'p', EnterOpenMode);
-        action_ctrl_key!(m, 'u', MoveUpPage);
-        action_ctrl_key!(m, 'U', ExtendUpPage);
-        action_ctrl_key!(m, 'd', MoveDownPage);
-        action_ctrl_key!(m, 'D', ExtendDownPage);
+        actions!(
+            m,
+
+        { Command, "command mode", (state) {
+            state.set_mode(mode::Command::new());
+        }},
+
+        { Insert, "insert mode", (state) {
+            state.set_mode(mode::Insert::new_normal());
+        }},
+
+        { InsertExtend , "insert extend mode", (state) {
+            state.set_mode(mode::Insert::new_extend());
+        }},
+
+        { MoveDownPage, "move down page", (state) {
+            state.cur_buffer_mut().move_cursor_down(25);
+        }},
+
+        { ExtendDownPage, "extend down page", (state) {
+            state.cur_buffer_mut().extend_cursor_down(25);
+        }},
+
+        { LineAppend, "append to line", (state) {
+            state
+                .cur_buffer_mut()
+                .extend_cursor(Idx::forward_to_line_end);
+            state.set_mode(mode::Insert::new_normal());
+        }},
+
+        { LineAppendExtend, "append to line (extend)", (state) {
+            state
+                .cur_buffer_mut()
+                .extend_cursor(Idx::forward_to_line_end);
+            state.set_mode(mode::Insert::new_extend());
+        }},
+        { OpenFile, "open mode", (state) {
+            state.set_mode(mode::Find::default());
+        }},
+
+        { MoveUpPage, "move up page", (state) {
+            state.cur_buffer_mut().move_cursor_up(25);
+        }},
+        { ExtendUpPage, "extend up page", (state) {
+            state.cur_buffer_mut().extend_cursor_up(25);
+        }},
+        );
+        m
+    })
+}
+
+macro_rules! key_mappings {
+    ($m:ident) => {};
+    ($m:ident,) => {};
+    ($m:ident, { $k:ident, $name:ident }, $($rest:tt)*) => {
+        $m.insert(NaturalyOrderedKey(Key::Char(stringify!($k).chars().next().unwrap())), stringify!($name));
+        key_mappings!($m, $($rest)*);
+    };
+    ($m:ident, { $k:expr, $name:ident }, $($rest:tt)*) => {
+        $m.insert(NaturalyOrderedKey(Key::Char($k)), stringify!($name));
+        key_mappings!($m, $($rest)*);
+    };
+    ($m:ident, { c_$k:ident, $name:ident }, $($rest:tt)*) => {
+        $m.insert(NaturalyOrderedKey(Key::Ctrl(stringify!($k).chars().next().unwrap())), stringify!($name));
+        key_mappings!($m, $($rest)*);
+    };
+}
+
+pub fn default_key_mappings() -> &'static super::KeyMappings {
+    static INSTANCE: OnceCell<super::KeyMappings> = OnceCell::new();
+    INSTANCE.get_or_init(|| {
+        let mut m = BTreeMap::new();
+
+        key_mappings!(
+            m,
+            { i, Insert },
+            { I, InsertExtend },
+            { ':', Command },
+            { a, LineAppend },
+            { c_p, OpenFile },
+            { c_u, MoveUpPage },
+            { c_d, MoveDownPage },
+            { c_U, ExtendUpPage },
+            { c_D, ExtendDownPage },
+        );
         m
     })
 }

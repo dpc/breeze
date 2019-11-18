@@ -298,8 +298,7 @@ impl render::Renderer for Render {
     }
 
     fn put(&mut self, coord: render::Coord, ch: char, style: render::Style) {
-        self.char_at_mut(coord)
-            .map(|c| *c = Char { ch, style: style });
+        self.char_at_mut(coord).map(|c| *c = Char { ch, style });
     }
 
     fn set_cursor(&mut self, coord: Option<render::Coord>) {

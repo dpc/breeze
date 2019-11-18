@@ -2,7 +2,6 @@ use super::*;
 
 use crate::action;
 use crate::state::State;
-use crate::NaturalyOrderedKey;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Normal {
@@ -50,8 +49,12 @@ impl Mode for Normal {
         }
     }
 
-    fn available_actions(&self) -> &action::Map {
-        action::normal::all_actions()
+    fn actions(&self) -> &super::action::ActionsById {
+        action::normal::actions()
+    }
+
+    fn key_mappings(&self) -> &action::KeyMappings {
+        action::normal::default_key_mappings()
     }
 }
 
@@ -181,7 +184,7 @@ impl Normal {
                 state.cur_buffer_mut().decrease_indent(times);
             }
             key => {
-                if let Some(action) = action::normal::all_actions().get(&NaturalyOrderedKey(key)) {
+                if let Some(action) = self.action_by_key(key) {
                     action.execute(state);
                 } else {
                     return false;
