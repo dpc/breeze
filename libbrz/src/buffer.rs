@@ -526,7 +526,7 @@ impl Buffer {
         });
     }
 
-    pub fn move_cursor_with_column<F>(&mut self, f: F)
+    pub fn move_cursor_vertically_with_column<F>(&mut self, f: F)
     where
         F: Fn(Idx, Option<usize>, &Rope) -> Idx,
     {
@@ -534,7 +534,7 @@ impl Buffer {
         self.map_each_enumerated_selection_mut(|i, sel, text| {
             let column = selection.cursor_column.get(i).cloned();
             let new_cursor = f(sel.cursor, column, text);
-            sel.anchor = sel.cursor;
+            sel.anchor = new_cursor;
             sel.cursor = new_cursor;
         });
     }
@@ -623,12 +623,16 @@ impl Buffer {
     pub fn move_cursor_down(&mut self, n: usize) {
         self.selection.maybe_save_cursor_column(&self.text);
 
-        self.move_cursor_with_column(|idx, column, text| idx.down_unaligned(n, column, text));
+        self.move_cursor_vertically_with_column(|idx, column, text| {
+            idx.down_unaligned(n, column, text)
+        });
     }
 
     pub fn move_cursor_up(&mut self, n: usize) {
         self.selection.maybe_save_cursor_column(&self.text);
-        self.move_cursor_with_column(|idx, column, text| idx.up_unaligned(n, column, text));
+        self.move_cursor_vertically_with_column(|idx, column, text| {
+            idx.up_unaligned(n, column, text)
+        });
     }
 
     pub fn extend_cursor_down(&mut self, n: usize) {
