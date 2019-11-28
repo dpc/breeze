@@ -22,6 +22,20 @@ fn char_category(ch: char) -> CharCategory {
     }
 }
 
+fn is_indent_opening_char(ch: char) -> bool {
+    match ch {
+        '{' | '(' | '[' | '<' => true,
+        _ => false,
+    }
+}
+
+fn is_indent_closing_char(ch: char) -> bool {
+    match ch {
+        '}' | ')' | ']' | '>' => true,
+        _ => false,
+    }
+}
+
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Idx(pub usize);
 
@@ -29,6 +43,7 @@ impl Idx {
     pub fn begining(_: &Rope) -> Idx {
         Idx(0)
     }
+
     pub fn end(text: &Rope) -> Idx {
         Idx(text.len_chars())
     }
@@ -53,7 +68,7 @@ impl Idx {
     }
 
     pub fn prev_char(self, text: &Rope) -> Option<char> {
-        if self.0 == 0 {
+        if self == Self::begining(text) {
             None
         } else {
             Some(text.char(self.0 - 1))
@@ -61,7 +76,7 @@ impl Idx {
     }
 
     pub fn next_char(self, text: &Rope) -> Option<char> {
-        if self.0 >= text.len_chars() {
+        if self >= Self::end(text) {
             None
         } else {
             Some(text.char(self.0))
@@ -80,6 +95,49 @@ impl Idx {
         }
 
         (start, cur)
+    }
+
+    pub fn to_after_indent_opening_char(mut self, text: &Rope) -> Option<Idx> {
+        let mut nesting = 0;
+        loop {
+            if self == Self::begining(text) {
+                return None;
+            }
+
+            let char_before = self.prev_char(text).unwrap();
+
+            if is_indent_opening_char(char_before) {
+                if nesting == 0 {
+                    return Some(self);
+                } else {
+                    nesting -= 1;
+                }
+            } else if is_indent_closing_char(char_before) {
+                nesting += 1;
+            }
+
+            self = self.backward(text);
+        }
+    }
+
+    /// Desired indent when opening a line when on position `self`
+    ///
+    /// `bool` - increase indent
+    pub fn desired_indent_when_opening_line(&self, text: &Rope) -> (Rope, bool) {
+        // TODO: this could finish faster then go to the begining of the buffer (potentially)
+        if let Some(indent_opening) = self.to_after_indent_opening_char(text) {
+            let increase_indent =
+                indent_opening.to_position(text).line == self.to_position(text).line;
+
+            let line_begining = self.backward_to_line_start(text);
+            let indent_end = self.before_first_non_whitespace(text);
+            (
+                line_begining.range_to(indent_end).slice(text).into(),
+                increase_indent,
+            )
+        } else {
+            (Rope::new(), false)
+        }
     }
 
     pub fn forward_word(self, text: &Rope) -> (Idx, Idx) {

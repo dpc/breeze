@@ -37,20 +37,6 @@ fn distance_to_prev_tabstop_test() {
     }
 }
 
-fn is_line_prefix_increasing_ident_level(start: Idx, end: Idx, text: &Rope) -> bool {
-    let mut level = 0isize;
-
-    for ch in start.range_to(end).slice(text).chars() {
-        if char::is_opening_indent(ch) {
-            level += 1;
-        } else if char::is_closing_indent(ch) {
-            level -= 1;
-        }
-    }
-
-    level > 0
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelectionSet {
     pub primary: usize,
@@ -370,16 +356,12 @@ impl Buffer {
     fn open_impl(&mut self, was_enter: bool, extend: bool) {
         self.selection.clear_cursor_column();
         let mut indents = self.map_each_enumerated_selection(|i, sel, text| {
-            let line_begining = sel.cursor.backward_to_line_start(text);
-            let indent_end = sel.cursor.before_first_non_whitespace(text);
-            let indent: Rope = line_begining.range_to(indent_end).slice(text).into();
+            let (indent, increase_indent) = sel.cursor.desired_indent_when_opening_line(text);
             let insert_idx = if was_enter {
                 sel.cursor
             } else {
                 sel.cursor.forward_to_line_end(text)
             };
-            let increase_indent =
-                is_line_prefix_increasing_ident_level(line_begining, insert_idx, text);
             (i, indent, insert_idx, increase_indent)
         });
         indents.sort_by_key(|&(_, _, insert_idx, _)| insert_idx);
