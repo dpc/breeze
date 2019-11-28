@@ -8,23 +8,9 @@ use ropey::Rope;
 pub struct SelectionUnaligned {
     pub anchor: Position,
     pub cursor: Position,
-    pub was_forward: bool,
 }
 
 impl SelectionUnaligned {
-    pub fn update_last_direction(mut self) -> Self {
-        let anchor = self.anchor;
-        let cursor = self.cursor;
-
-        if anchor < cursor {
-            self.was_forward = true;
-        } else if cursor < anchor {
-            self.was_forward = false;
-        }
-
-        self
-    }
-
     pub fn sorted(self) -> (Position, Position) {
         if self.anchor.line < self.cursor.line {
             (self.anchor, self.cursor)
@@ -46,7 +32,6 @@ impl SelectionUnaligned {
         Selection {
             anchor: self.anchor.trim_column_to_buf(text).to_idx(text),
             cursor: self.cursor.trim_column_to_buf(text).to_idx(text),
-            was_forward: self.was_forward,
         }
     }
 
@@ -54,7 +39,6 @@ impl SelectionUnaligned {
         Self {
             anchor: self.anchor.trim_line_to_buf(text),
             cursor: self.cursor.trim_line_to_buf(text),
-            was_forward: self.was_forward,
         }
     }
 
@@ -63,7 +47,6 @@ impl SelectionUnaligned {
         Self {
             cursor: self.cursor,
             anchor: self.cursor,
-            was_forward: self.was_forward,
         }
     }
 
@@ -71,7 +54,6 @@ impl SelectionUnaligned {
         Self {
             anchor: self.cursor,
             cursor: self.anchor,
-            was_forward: !self.was_forward,
         }
     }
 
@@ -79,7 +61,6 @@ impl SelectionUnaligned {
         Self {
             cursor: sel.cursor.to_position(text),
             anchor: sel.anchor.to_position(text),
-            was_forward: sel.was_forward,
         }
     }
 }
@@ -92,22 +73,9 @@ impl SelectionUnaligned {
 pub struct Selection {
     pub anchor: Idx,
     pub cursor: Idx,
-    pub was_forward: bool,
 }
 
 impl Selection {
-    pub fn update_last_direction(mut self) -> Self {
-        let anchor = self.anchor;
-        let cursor = self.cursor;
-
-        if anchor < cursor {
-            self.was_forward = true;
-        } else if cursor < anchor {
-            self.was_forward = false;
-        }
-
-        self
-    }
     pub fn aligned(mut self, text: &Rope) -> Self {
         self.anchor = self.anchor.trim_to_text(text);
         self.cursor = self.cursor.trim_to_text(text);
@@ -137,11 +105,7 @@ impl Selection {
 
     pub fn self_or_direction_marker(mut self, text: &Rope) -> Self {
         if self.anchor == self.cursor {
-            if self.was_forward {
-                self.cursor = self.cursor.backward(text);
-            } else {
-                self.cursor = self.cursor.forward(text);
-            }
+            self.cursor = self.cursor.backward(text);
             self.aligned(text)
         } else {
             self
@@ -157,7 +121,7 @@ impl Selection {
         } else if cursor < anchor {
             false
         } else {
-            self.was_forward
+            true
         }
     }
 
@@ -191,7 +155,6 @@ impl Selection {
         Self {
             cursor: self.cursor,
             anchor: self.cursor,
-            was_forward: self.was_forward,
         }
     }
 
@@ -199,7 +162,6 @@ impl Selection {
         Self {
             anchor: self.cursor,
             cursor: self.anchor,
-            was_forward: !self.was_forward,
         }
     }
 

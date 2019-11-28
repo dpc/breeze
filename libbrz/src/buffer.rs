@@ -137,7 +137,7 @@ impl SelectionSet {
     pub fn sort(&mut self) {
         for i in 0..self.selections.len() {
             let sel = &mut self.selections[i];
-            *sel = sel.sorted().update_last_direction();
+            *sel = sel.sorted()
         }
     }
 }
@@ -229,7 +229,6 @@ impl Buffer {
             .iter_mut()
             .map(|sel| {
                 let res = f(sel, text);
-                *sel = sel.update_last_direction();
                 res
             })
             .collect()
@@ -272,20 +271,20 @@ impl Buffer {
     }
 
     pub fn idx_selection_type(&self, idx: Idx) -> VisualSelection {
-        if self
+        if self.selection.selections.iter().any(|sel| {
+            /*sel.is_empty()
+            && */
+            sel.aligned(&self.text)
+                .is_idx_inside_direction_marker(idx, &self.text)
+        }) {
+            VisualSelection::DirectionMarker
+        } else if self
             .selection
             .selections
             .iter()
             .any(|sel| sel.aligned(&self.text).is_idx_strictly_inside(idx))
         {
             VisualSelection::Selection
-        } else if self.selection.selections.iter().any(|sel| {
-            sel.is_empty()
-                && sel
-                    .aligned(&self.text)
-                    .is_idx_inside_direction_marker(idx, &self.text)
-        }) {
-            VisualSelection::DirectionMarker
         } else {
             VisualSelection::None
         }
@@ -694,21 +693,9 @@ impl Buffer {
     }
 
     pub fn select_all(&mut self) {
-        self.selection.selections = vec![if self.selection.selections[self.selection.primary]
-            .aligned(&self.text)
-            .is_forward()
-        {
-            Selection {
-                anchor: Idx(0),
-                cursor: Idx(self.text.len_chars()),
-                was_forward: true,
-            }
-        } else {
-            Selection {
-                cursor: Idx(0),
-                anchor: Idx(self.text.len_chars()),
-                was_forward: false,
-            }
+        self.selection.selections = vec![Selection {
+            anchor: Idx(0),
+            cursor: Idx(self.text.len_chars()),
         }];
     }
 

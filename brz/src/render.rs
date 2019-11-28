@@ -158,8 +158,8 @@ impl Render {
                 ..Default::default()
             },
             direction_marker: render::Style {
-                fg: Some(14),
-                bg: Some(10),
+                fg: Some(16),
+                bg: Some(4),
                 ..Default::default()
             },
             selection: render::Style {
