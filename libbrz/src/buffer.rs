@@ -274,7 +274,7 @@ impl Buffer {
         if self.selection.selections.iter().any(|sel| {
             /*sel.is_empty()
             && */
-            sel.aligned(&self.text)
+            sel.normalized(&self.text)
                 .is_idx_inside_direction_marker(idx, &self.text)
         }) {
             VisualSelection::DirectionMarker
@@ -282,7 +282,7 @@ impl Buffer {
             .selection
             .selections
             .iter()
-            .any(|sel| sel.aligned(&self.text).is_idx_strictly_inside(idx))
+            .any(|sel| sel.normalized(&self.text).is_idx_strictly_inside(idx))
         {
             VisualSelection::Selection
         } else {
@@ -393,7 +393,7 @@ impl Buffer {
         self.selection.clear_cursor_column();
         let res = self.map_each_enumerated_selection_mut(|i, sel, text| {
             let range = sel
-                .aligned(text)
+                .normalized(text)
                 .self_or_direction_marker(text)
                 .sorted_range_usize();
             let yanked = text.slice(range.clone()).into();
@@ -415,7 +415,7 @@ impl Buffer {
 
     pub fn yank(&mut self) -> Vec<Rope> {
         self.map_each_selection_mut(|sel, text| {
-            let range = sel.aligned(text).sorted_range_usize();
+            let range = sel.normalized(text).sorted_range_usize();
             text.slice(range).into()
         })
     }
@@ -468,7 +468,7 @@ impl Buffer {
     pub fn backspace_one(&mut self) {
         self.selection.clear_cursor_column();
         let removal_points = self.map_each_enumerated_selection_mut(|_, sel, text| {
-            let sel_aligned = sel.aligned(text);
+            let sel_aligned = sel.normalized(text);
             let range = (sel_aligned.cursor.0 - 1)..sel_aligned.cursor.0;
             *sel = sel.collapsed();
 

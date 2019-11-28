@@ -66,9 +66,9 @@ impl SelectionUnaligned {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-/// Selection with coordinates aligned
+/// Selection with coordinates normalized
 ///
-/// As coordinates are aligned, it's OK to keep
+/// As coordinates are normalized, it's OK to keep
 /// just the index in the text.
 pub struct Selection {
     pub anchor: Idx,
@@ -76,9 +76,19 @@ pub struct Selection {
 }
 
 impl Selection {
-    pub fn aligned(mut self, text: &Rope) -> Self {
+    pub fn new(anchor: Idx, cursor: Idx, text: &Rope) -> Self {
+        Self { anchor, cursor }.normalized(text)
+    }
+
+    pub fn normalized(mut self, text: &Rope) -> Self {
         self.anchor = self.anchor.trim_to_text(text);
         self.cursor = self.cursor.trim_to_text(text);
+        if self.anchor == self.cursor {
+            self.anchor = self.cursor.backward(text);
+        }
+        if self.anchor == self.cursor {
+            self.anchor = self.cursor.forward(text);
+        }
         self
     }
 
@@ -106,7 +116,7 @@ impl Selection {
     pub fn self_or_direction_marker(mut self, text: &Rope) -> Self {
         if self.anchor == self.cursor {
             self.cursor = self.cursor.backward(text);
-            self.aligned(text)
+            self.normalized(text)
         } else {
             self
         }
