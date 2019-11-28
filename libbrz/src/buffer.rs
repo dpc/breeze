@@ -388,6 +388,7 @@ impl Buffer {
         if !extend {
             self.selection.collapse();
         }
+
         for (i, (_, indent, insert_idx, increase_indent)) in indents.iter().enumerate() {
             let mut inserted_len = 0;
             self.text.insert(insert_idx.0, &indent.to_string());

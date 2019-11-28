@@ -1,37 +1,11 @@
-use crate::mode;
-use crate::Idx;
 use once_cell::sync::OnceCell;
 use std::collections::BTreeMap;
 
+use crate::mode;
+use crate::Idx;
 use crate::Key;
 
-use super::*;
-
-macro_rules! action {
-    ($name:ident, $help:expr, ($state:ident) $body:block) => {
-        struct $name;
-
-        impl Action for $name {
-            fn help(&self) -> &str {
-                $help
-            }
-
-            fn execute(&self, $state: &mut State) {
-                $body
-            }
-        }
-    };
-}
-
-macro_rules! actions {
-    ($m:ident) => {};
-    ($m:ident,) => {};
-    ($m:ident, {  $name:ident, $help:expr, ($state:ident) $body:block }, $($rest:tt)*) => {
-        action!($name, $help, ($state) $body);
-        $m.insert(stringify!($name), Box::new($name) as Box<_>);
-        actions!($m, $($rest)*);
-    };
-}
+use crate::{action, actions, key_mappings};
 
 pub fn actions() -> &'static super::ActionsById {
     static INSTANCE: OnceCell<super::ActionsById> = OnceCell::new();
@@ -41,69 +15,70 @@ pub fn actions() -> &'static super::ActionsById {
         actions!(
             m,
 
-        { Command, "command mode", (state) {
-            state.set_mode(mode::Command::new());
-        }},
+            Command, "command mode", (state) {
+                state.set_mode(mode::Command::new());
+            },
 
-        { Insert, "insert mode", (state) {
-            state.set_mode(mode::Insert::new_normal());
-        }},
+            Insert, "insert mode", (state) {
+                state.set_mode(mode::Insert::new_normal());
+            },
 
-        { InsertExtend , "insert extend mode", (state) {
-            state.set_mode(mode::Insert::new_extend());
-        }},
+            InsertExtend , "insert extend mode", (state) {
+                state.set_mode(mode::Insert::new_extend());
+            },
 
-        { MoveDownPage, "move down page", (state) {
-            state.cur_buffer_mut().move_cursor_down(25);
-        }},
+            MoveDownPage, "move down page", (state) {
+                state.cur_buffer_mut().move_cursor_down(25);
+            },
 
-        { ExtendDownPage, "extend down page", (state) {
-            state.cur_buffer_mut().extend_cursor_down(25);
-        }},
+            ExtendDownPage, "extend down page", (state) {
+                state.cur_buffer_mut().extend_cursor_down(25);
+            },
 
-        { LineAppend, "append to line", (state) {
-            state
-                .cur_buffer_mut()
-                .extend_cursor(Idx::forward_to_line_end);
-            state.set_mode(mode::Insert::new_normal());
-        }},
+            LineAppend, "append to line", (state) {
+                state
+                    .cur_buffer_mut()
+                    .extend_cursor(Idx::forward_to_line_end);
+                state.set_mode(mode::Insert::new_normal());
+            },
 
-        { LineAppendExtend, "append to line (extend)", (state) {
-            state
-                .cur_buffer_mut()
-                .extend_cursor(Idx::forward_to_line_end);
-            state.set_mode(mode::Insert::new_extend());
-        }},
-        { OpenFile, "open mode", (state) {
-            state.set_mode(mode::Find::default());
-        }},
+            LineAppendExtend, "append to line (extend)", (state) {
+                state
+                    .cur_buffer_mut()
+                    .extend_cursor(Idx::forward_to_line_end);
+                state.set_mode(mode::Insert::new_extend());
+            },
 
-        { MoveUpPage, "move up page", (state) {
-            state.cur_buffer_mut().move_cursor_up(25);
-        }},
-        { ExtendUpPage, "extend up page", (state) {
-            state.cur_buffer_mut().extend_cursor_up(25);
-        }},
+            OpenFile, "open mode", (state) {
+                state.set_mode(mode::Find::default());
+            },
+
+            MoveUpPage, "move up page", (state) {
+                state.cur_buffer_mut().move_cursor_up(25);
+            },
+
+            ExtendUpPage, "extend up page", (state) {
+                state.cur_buffer_mut().extend_cursor_up(25);
+            },
+
+            IndentRight, "indent right", (state) {
+                let times = state.take_num_prefix();
+                state.cur_buffer_mut().increase_indent(times);
+            },
+
+            IndentLeft, "indent left", (state) {
+                let times = state.take_num_prefix();
+                state.cur_buffer_mut().decrease_indent(times);
+            },
+
+
+            OpenLine, "open line", (state) {
+                state.cur_buffer_mut().open();
+                state.set_mode(mode::Insert::new_normal());
+            },
         );
         m
     })
-}
-
-macro_rules! key_mappings {
-    ($m:ident) => {};
-    ($m:ident,) => {};
-    ($m:ident, { $k:ident, $name:ident }, $($rest:tt)*) => {
-        $m.insert(NaturalyOrderedKey(Key::Char(stringify!($k).chars().next().unwrap())), stringify!($name));
-        key_mappings!($m, $($rest)*);
-    };
-    ($m:ident, { $k:expr, $name:ident }, $($rest:tt)*) => {
-        $m.insert(NaturalyOrderedKey(Key::Char($k)), stringify!($name));
-        key_mappings!($m, $($rest)*);
-    };
-    ($m:ident, { c_$k:ident, $name:ident }, $($rest:tt)*) => {
-        $m.insert(NaturalyOrderedKey(Key::Ctrl(stringify!($k).chars().next().unwrap())), stringify!($name));
-        key_mappings!($m, $($rest)*);
-    };
 }
 
 pub fn default_key_mappings() -> &'static super::KeyMappings {
@@ -117,11 +92,15 @@ pub fn default_key_mappings() -> &'static super::KeyMappings {
             { I, InsertExtend },
             { ':', Command },
             { a, LineAppend },
+            { A, LineAppendExtend },
             { c_p, OpenFile },
             { c_u, MoveUpPage },
             { c_d, MoveDownPage },
             { c_U, ExtendUpPage },
             { c_D, ExtendDownPage },
+            { '>', IndentRight },
+            { '<', IndentLeft },
+            { 'o', OpenLine },
         );
         m
     })

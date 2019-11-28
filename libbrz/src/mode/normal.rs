@@ -4,9 +4,7 @@ use crate::action;
 use crate::state::State;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Normal {
-    num_prefix: Option<usize>,
-}
+pub struct Normal;
 
 impl Mode for Normal {
     fn name(&self) -> &str {
@@ -29,8 +27,9 @@ impl Mode for Normal {
 
         match key {
             Key::Char(n @ '0'..='9') => {
-                self.num_prefix = Some(
-                    self.num_prefix
+                state.num_prefix = Some(
+                    state
+                        .num_prefix
                         .unwrap_or(0)
                         .saturating_mul(10)
                         .saturating_add(n as usize - '0' as usize),
@@ -41,7 +40,7 @@ impl Mode for Normal {
                     .cur_buffer_state_mut_opt()
                     .map(|b| b.maybe_commit_undo_point());
                 self.handle_not_digit(state, other);
-                self.num_prefix = None;
+                state.num_prefix = None;
                 state
                     .cur_buffer_state_mut_opt()
                     .map(|b| b.maybe_commit_undo_point());
@@ -60,7 +59,7 @@ impl Mode for Normal {
 
 impl Normal {
     fn handle_not_digit(&self, state: &mut State, key: Key) -> bool {
-        let times = self.num_prefix.unwrap_or(1);
+        let times = state.num_prefix.unwrap_or(1);
 
         match key {
             Key::Char('u') => {
@@ -76,7 +75,7 @@ impl Normal {
     }
 
     fn handle_not_digit_not_undo(&self, state: &mut State, key: Key) -> bool {
-        let times = self.num_prefix.unwrap_or(1);
+        let times = state.num_prefix.unwrap_or(1);
         let buffer = state.cur_buffer_mut();
         match key {
             Key::Esc => {}
@@ -87,7 +86,7 @@ impl Normal {
                 state.set_mode(Find::default());
             }
             Key::Char('g') => {
-                if let Some(num_prefix) = self.num_prefix {
+                if let Some(num_prefix) = state.num_prefix {
                     state.cur_buffer_mut().move_cursor_coord(|coord, text| {
                         coord.set_line(num_prefix.saturating_sub(1), text)
                     });
@@ -138,10 +137,6 @@ impl Normal {
                 state.yanked = state.cur_buffer_mut().delete();
                 state.set_mode(Insert::new_normal());
             }
-            Key::Char('o') => {
-                state.cur_buffer_mut().open();
-                state.set_mode(Insert::new_normal());
-            }
             Key::Char('y') => {
                 state.yanked = state.cur_buffer_mut().yank();
             }
@@ -176,12 +171,6 @@ impl Normal {
             }
             Key::Char('\'') | Key::Alt(';') => {
                 state.cur_buffer_mut().reverse_selections();
-            }
-            Key::Char('>') => {
-                state.cur_buffer_mut().increase_indent(times);
-            }
-            Key::Char('<') => {
-                state.cur_buffer_mut().decrease_indent(times);
             }
             key => {
                 if let Some(action) = self.action_by_key(key) {

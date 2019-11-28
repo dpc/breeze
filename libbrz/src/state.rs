@@ -97,6 +97,8 @@ pub struct State {
     cur_buffer_i: Option<usize>,
 
     pub last_visual_cursor_coord: RefCell<Option<Coord>>,
+
+    pub num_prefix: Option<usize>,
 }
 
 impl State {
@@ -106,6 +108,10 @@ impl State {
         } else {
             self.mode.as_ref().expect("mode set").cmd_string()
         }
+    }
+
+    pub(crate) fn take_num_prefix(&mut self) -> usize {
+        self.num_prefix.take().unwrap_or(1)
     }
 
     pub(crate) fn set_mode(&mut self, mode: impl Mode + 'static) {
@@ -496,6 +502,7 @@ impl Default for State {
                 ))
             }),
             last_visual_cursor_coord: RefCell::new(None),
+            num_prefix: None,
         }
     }
 }
