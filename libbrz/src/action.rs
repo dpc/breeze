@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 #[macro_export]
 macro_rules! action {
     ($name:ident, $help:expr, ($state:ident) $body:block) => {
-        struct $name;
+        pub struct $name;
 
         impl $crate::action::Action for $name {
             fn help(&self) -> &str {
@@ -24,6 +24,12 @@ macro_rules! action {
         }
     };
 }
+
+action!(
+    ActionNotFound, "action not found", (state) {
+        state.msg = Some("Action not found".into());
+    }
+);
 
 #[macro_export]
 macro_rules! actions {
@@ -40,16 +46,22 @@ macro_rules! actions {
 macro_rules! key_mappings {
     ($m:ident) => {};
     ($m:ident,) => {};
+    ($m:ident, { c $k:ident, $name:ident }, $($rest:tt)*) => {
+        $m.insert($crate::action::NaturalyOrderedKey(Key::Ctrl(stringify!($k).chars().next().unwrap())), stringify!($name));
+        key_mappings!($m, $($rest)*);
+    };
+    ($m:ident, { a $k:ident, $name:ident }, $($rest:tt)*) => {
+        $m.insert($crate::action::NaturalyOrderedKey(Key::Alt(stringify!($k).chars().next().unwrap())), stringify!($name));
+        key_mappings!($m, $($rest)*);
+    };
+
     ($m:ident, { $k:ident, $name:ident }, $($rest:tt)*) => {
         $m.insert($crate::action::NaturalyOrderedKey(Key::Char(stringify!($k).chars().next().unwrap())), stringify!($name));
         key_mappings!($m, $($rest)*);
     };
+
     ($m:ident, { $k:expr, $name:ident }, $($rest:tt)*) => {
         $m.insert($crate::action::NaturalyOrderedKey(Key::Char($k)), stringify!($name));
-        key_mappings!($m, $($rest)*);
-    };
-    ($m:ident, { c_$k:ident, $name:ident }, $($rest:tt)*) => {
-        $m.insert(NaturalyOrderedKey(Key::Ctrl(stringify!($k).chars().next().unwrap())), stringify!($name));
         key_mappings!($m, $($rest)*);
     };
 }

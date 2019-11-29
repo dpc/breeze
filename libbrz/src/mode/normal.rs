@@ -172,13 +172,10 @@ impl Normal {
             Key::Char('\'') | Key::Alt(';') => {
                 state.cur_buffer_mut().reverse_selections();
             }
-            key => {
-                if let Some(action) = self.action_by_key(key) {
-                    action.execute(state);
-                } else {
-                    return false;
-                }
-            }
+            key => self
+                .action_by_key(key)
+                .unwrap_or_else(|| &action::ActionNotFound)
+                .execute(state),
         }
         true
     }

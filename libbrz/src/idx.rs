@@ -24,14 +24,14 @@ fn char_category(ch: char) -> CharCategory {
 
 fn is_indent_opening_char(ch: char) -> bool {
     match ch {
-        '{' | '(' | '[' | '<' => true,
+        '{' | '(' | '[' | '<' | '"' => true,
         _ => false,
     }
 }
 
 fn is_indent_closing_char(ch: char) -> bool {
     match ch {
-        '}' | ')' | ']' | '>' => true,
+        '}' | ')' | ']' | '>' | '"' => true,
         _ => false,
     }
 }
@@ -120,6 +120,28 @@ impl Idx {
         }
     }
 
+    pub fn to_before_indent_closing_char(mut self, text: &Rope) -> Option<Idx> {
+        let mut nesting = 0;
+        loop {
+            if self == Self::end(text) {
+                return None;
+            }
+
+            let char_before = self.next_char(text).unwrap();
+
+            if is_indent_closing_char(char_before) {
+                if nesting == 0 {
+                    return Some(self);
+                } else {
+                    nesting -= 1;
+                }
+            } else if is_indent_opening_char(char_before) {
+                nesting += 1;
+            }
+
+            self = self.forward(text);
+        }
+    }
     /// Desired indent when opening a line when on position `self`
     ///
     /// `bool` - increase indent

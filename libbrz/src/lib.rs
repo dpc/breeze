@@ -119,6 +119,7 @@ impl cmp::Ord for NaturalyOrderedKey {
             .then(self.0.cmp(&other.0))
     }
 }
+
 impl cmp::PartialOrd for NaturalyOrderedKey {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))

@@ -76,6 +76,13 @@ pub fn actions() -> &'static super::ActionsById {
                 state.cur_buffer_mut().open();
                 state.set_mode(mode::Insert::new_normal());
             },
+
+            SelectInnerSurrounding, "select inner surrounding", (state) {
+                state.cur_buffer_mut().select_inner_surrounding();
+            },
+            ExpandInnerSurrounding, "expand inner surrounding", (state) {
+                state.cur_buffer_mut().select_inner_surrounding();
+            },
         );
         m
     })
@@ -93,14 +100,16 @@ pub fn default_key_mappings() -> &'static super::KeyMappings {
             { ':', Command },
             { a, LineAppend },
             { A, LineAppendExtend },
-            { c_p, OpenFile },
-            { c_u, MoveUpPage },
-            { c_d, MoveDownPage },
-            { c_U, ExtendUpPage },
-            { c_D, ExtendDownPage },
+            { c p, OpenFile },
+            { c u, MoveUpPage },
+            { c d, MoveDownPage },
+            { c U, ExtendUpPage },
+            { c D, ExtendDownPage },
             { '>', IndentRight },
             { '<', IndentLeft },
             { 'o', OpenLine },
+            { a i, SelectInnerSurrounding },
+            { a I, ExpandInnerSurrounding },
         );
         m
     })

@@ -2,7 +2,7 @@
 use crate::{idx::*, position::*, prelude::*, selection::*, util::char};
 use ropey::Rope;
 use std::cell::RefCell;
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
@@ -664,6 +664,94 @@ impl Buffer {
         self.move_cursor_2(Idx::backward_word)
     }
 
+    pub fn select_inner_surrounding(&mut self) {
+        self.selection.clear_cursor_column();
+
+        self.map_each_selection_mut(|sel, text| {
+            if sel.is_forward() {
+                let start_right = sel.cursor;
+                let start_left = sel.anchor;
+
+                let mut right = start_right
+                    .to_before_indent_closing_char(text)
+                    .unwrap_or_else(|| Idx::end(text));
+
+                let mut left = right
+                    .to_after_indent_opening_char(text)
+                    .unwrap_or_else(|| Idx::begining(text));
+
+                // if we're exactly in the same spot, expand by one
+                if (left == start_left && right == start_right) || left == right {
+                    left = left.backward(text);
+                    right = right.forward(text);
+                }
+
+                sel.cursor = right;
+                sel.anchor = left;
+            } else {
+                let start_left = sel.cursor;
+                let start_right = sel.anchor;
+
+                let mut left = start_left
+                    .to_after_indent_opening_char(text)
+                    .unwrap_or_else(|| Idx::begining(text));
+
+                let mut right = left
+                    .to_before_indent_closing_char(text)
+                    .unwrap_or_else(|| Idx::end(text));
+
+                // if we're exactly in the same spot, expand by one
+                if (left == start_left && right == start_right) || left == right {
+                    left = left.backward(text);
+                    right = right.forward(text);
+                }
+
+                sel.cursor = left;
+                sel.anchor = right;
+            }
+        });
+    }
+
+    pub fn expand_inner_surrounding(&mut self) {
+        self.selection.clear_cursor_column();
+
+        self.map_each_selection_mut(|sel, text| {
+            let (start_left, start_right) = sel.sorted_pair();
+
+            let left = start_left
+                .to_after_indent_opening_char(text)
+                .unwrap_or_else(|| Idx::begining(text));
+            let right = start_right
+                .to_before_indent_closing_char(text)
+                .unwrap_or_else(|| Idx::end(text));
+
+            let counter_left = right
+                .to_after_indent_opening_char(text)
+                .unwrap_or_else(|| Idx::begining(text));
+
+            let counter_right = left
+                .to_before_indent_closing_char(text)
+                .unwrap_or_else(|| Idx::end(text));
+
+            let mut left = min(left, counter_left);
+
+            let mut right = max(right, counter_right);
+
+            // if we're exactly in the same spot, expand by one
+            if left == start_left && right == start_right {
+                left = left.backward(text);
+                right = right.forward(text);
+            }
+
+            if sel.is_forward() {
+                sel.anchor = left;
+                sel.cursor = right;
+            } else {
+                sel.cursor = left;
+                sel.anchor = right;
+            }
+        });
+    }
     pub fn cursor_coord(&self) -> Position {
         self.selection.selections[0].cursor.to_position(&self.text)
     }
