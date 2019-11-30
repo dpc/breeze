@@ -668,47 +668,16 @@ impl Buffer {
         self.selection.clear_cursor_column();
 
         self.map_each_selection_mut(|sel, text| {
-            if sel.is_forward() {
-                let start_right = sel.cursor;
-                let start_left = sel.anchor;
+            let (start_left, start_right) = sel.sorted_pair();
+            let (mut left, mut right) = sel.cursor.find_surounding_area(text);
 
-                let mut right = start_right
-                    .to_before_indent_closing_char(text)
-                    .unwrap_or_else(|| Idx::end(text));
-
-                let mut left = right
-                    .to_after_indent_opening_char(text)
-                    .unwrap_or_else(|| Idx::begining(text));
-
-                // if we're exactly in the same spot, expand by one
-                if (left == start_left && right == start_right) || left == right {
-                    left = left.backward(text);
-                    right = right.forward(text);
-                }
-
-                sel.cursor = right;
-                sel.anchor = left;
-            } else {
-                let start_left = sel.cursor;
-                let start_right = sel.anchor;
-
-                let mut left = start_left
-                    .to_after_indent_opening_char(text)
-                    .unwrap_or_else(|| Idx::begining(text));
-
-                let mut right = left
-                    .to_before_indent_closing_char(text)
-                    .unwrap_or_else(|| Idx::end(text));
-
-                // if we're exactly in the same spot, expand by one
-                if (left == start_left && right == start_right) || left == right {
-                    left = left.backward(text);
-                    right = right.forward(text);
-                }
-
-                sel.cursor = left;
-                sel.anchor = right;
+            // if we're exactly in the same spot, expand by one
+            if (left == start_left && right == start_right) || left == right {
+                left = left.backward(text);
+                right = right.forward(text);
             }
+
+            *sel = sel.unify_direction_of(Selection::new_from_normalized(left, right));
         });
     }
 

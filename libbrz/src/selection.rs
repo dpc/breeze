@@ -76,8 +76,20 @@ pub struct Selection {
 }
 
 impl Selection {
+    pub fn new_from_normalized(anchor: Idx, cursor: Idx) -> Self {
+        Self { anchor, cursor }
+    }
+
     pub fn new(anchor: Idx, cursor: Idx, text: &Rope) -> Self {
         Self { anchor, cursor }.normalized(text)
+    }
+
+    pub fn unify_direction_of(self, other: Self) -> Self {
+        if self.is_forward() ^ other.is_forward() {
+            other.reversed()
+        } else {
+            other
+        }
     }
 
     pub fn normalized(mut self, text: &Rope) -> Self {

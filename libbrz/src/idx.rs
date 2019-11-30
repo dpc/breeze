@@ -3,6 +3,7 @@ use ropey::Rope;
 use crate::position::*;
 use crate::range::Range;
 use crate::util::char;
+use std::collections::VecDeque;
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum CharCategory {
@@ -24,15 +25,29 @@ fn char_category(ch: char) -> CharCategory {
 
 fn is_indent_opening_char(ch: char) -> bool {
     match ch {
-        '{' | '(' | '[' | '<' | '"' => true,
+        '{' | '(' | '[' | '<' | '"' | '\'' => true,
         _ => false,
     }
 }
 
 fn is_indent_closing_char(ch: char) -> bool {
     match ch {
-        '}' | ')' | ']' | '>' | '"' => true,
+        '}' | ')' | ']' | '>' | '"' | '\'' => true,
         _ => false,
+    }
+}
+
+fn matching_char(ch: char) -> char {
+    match ch {
+        '{' => '}',
+        '}' => '{',
+        '[' => ']',
+        ']' => '[',
+        '<' => '>',
+        '>' => '<',
+        '(' => ')',
+        ')' => '(',
+        other => other,
     }
 }
 
@@ -98,45 +113,185 @@ impl Idx {
     }
 
     pub fn to_after_indent_opening_char(mut self, text: &Rope) -> Option<Idx> {
-        let mut nesting = 0;
+        let mut nesting = vec![];
+
         loop {
             if self == Self::begining(text) {
                 return None;
             }
 
-            let char_before = self.prev_char(text).unwrap();
+            let ch = self.prev_char(text).unwrap();
 
-            if is_indent_opening_char(char_before) {
-                if nesting == 0 {
+            if is_indent_opening_char(ch) {
+                if nesting.is_empty() {
                     return Some(self);
-                } else {
-                    nesting -= 1;
+                } else if ch == matching_char(nesting[nesting.len() - 1]) {
+                    nesting.pop();
+                    self = self.backward(text);
+                    continue;
                 }
-            } else if is_indent_closing_char(char_before) {
-                nesting += 1;
+            }
+
+            if is_indent_closing_char(ch) {
+                nesting.push(ch);
             }
 
             self = self.backward(text);
         }
     }
 
+    pub fn find_surounding_area(self, text: &Rope) -> (Idx, Idx) {
+        self.find_surounding_area_opt(text)
+            .unwrap_or_else(|| (Self::begining(text), Self::end(text)))
+    }
+
+    pub fn find_surounding_area_opt(self, text: &Rope) -> Option<(Idx, Idx)> {
+        let begining = Idx::begining(text);
+        let end = Idx::end(text);
+        // left_back=====left_fron   right_front=====right_back
+        let mut left_q: VecDeque<(char, Option<Idx>)> = VecDeque::new();
+        let mut right_q: VecDeque<(char, Option<Idx>)> = VecDeque::new();
+
+        let mut left = self;
+        let mut right = self;
+        let mut pushed_something = false;
+
+        loop {
+            if pushed_something && left_q.is_empty() && right_q.is_empty() {
+                return Some((left.forward(text), right.backward(text)));
+            }
+
+            if left == begining && right == end {
+                return None;
+            }
+            if left != Idx::begining(text) && (left_q.len() <= right_q.len() || right == end) {
+                let ch = left.prev_char(text).unwrap();
+                left = left.backward(text);
+
+                match (is_indent_opening_char(ch), is_indent_closing_char(ch)) {
+                    (true, false) => {
+                        // we close the match if there is any, skipping any
+                        // unmatched chars
+                        let matching = matching_char(ch);
+                        if right_q.iter().any(|(ch, _)| *ch == matching) {
+                            loop {
+                                let (ch, idx) = right_q.pop_front().expect("not empty");
+                                if matching == ch {
+                                    if let Some(idx) = idx {
+                                        return Some((left.forward(text), idx.backward(text)));
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
+                        } else {
+                            left_q.push_back((ch, Some(left)));
+                            pushed_something = true;
+                        }
+                    }
+                    (false, true) => {
+                        right_q.push_front((ch, None));
+                    }
+                    (true, true) => {
+                        // we close the match if there is any, skipping any
+                        // unmatched chars
+                        let matching = matching_char(ch);
+                        if right_q.iter().any(|(ch, _)| *ch == matching) {
+                            loop {
+                                let (ch, idx) = right_q.pop_front().expect("not empty");
+                                if matching == ch {
+                                    if let Some(idx) = idx {
+                                        return Some((left.forward(text), idx.backward(text)));
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
+                        } else {
+                            left_q.push_front((ch, Some(left)));
+                            pushed_something = true;
+                        }
+                    }
+                    (false, false) => {}
+                }
+            } else if right != end {
+                let ch = right.next_char(text).unwrap();
+                right = right.forward(text);
+
+                match (is_indent_closing_char(ch), is_indent_opening_char(ch)) {
+                    (true, false) => {
+                        // we close the match if there is any, skipping any
+                        // unmatched chars
+                        let matching = matching_char(ch);
+                        if left_q.iter().any(|(ch, _)| *ch == matching) {
+                            loop {
+                                let (ch, idx) = left_q.pop_front().expect("not empty");
+
+                                if matching == ch {
+                                    if let Some(idx) = idx {
+                                        return Some((idx.forward(text), right.backward(text)));
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
+                        } else {
+                            right_q.push_back((ch, Some(right)));
+                            pushed_something = true;
+                        }
+                    }
+                    (false, true) => {
+                        left_q.push_front((ch, None));
+                    }
+                    (true, true) => {
+                        // we close the match if there is any, skipping any
+                        // unmatched chars
+
+                        let matching = matching_char(ch);
+                        if left_q.iter().any(|(ch, _)| *ch == matching) {
+                            loop {
+                                let (ch, idx) = left_q.pop_front().expect("not empty");
+
+                                if matching == ch {
+                                    if let Some(idx) = idx {
+                                        return Some((idx.forward(text), right.backward(text)));
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
+                        } else {
+                            right_q.push_front((ch, Some(right)));
+                            pushed_something = true;
+                        }
+                    }
+                    (false, false) => {}
+                }
+            }
+        }
+    }
+
     pub fn to_before_indent_closing_char(mut self, text: &Rope) -> Option<Idx> {
-        let mut nesting = 0;
+        let mut nesting = vec![];
         loop {
             if self == Self::end(text) {
                 return None;
             }
 
-            let char_before = self.next_char(text).unwrap();
+            let ch = self.next_char(text).unwrap();
 
-            if is_indent_closing_char(char_before) {
-                if nesting == 0 {
+            if is_indent_closing_char(ch) {
+                if nesting.is_empty() {
                     return Some(self);
-                } else {
-                    nesting -= 1;
+                } else if ch == matching_char(nesting[nesting.len() - 1]) {
+                    nesting.pop();
+                    self = self.forward(text);
+                    continue;
                 }
-            } else if is_indent_opening_char(char_before) {
-                nesting += 1;
+            }
+
+            if is_indent_opening_char(ch) {
+                nesting.push(ch);
             }
 
             self = self.forward(text);
