@@ -92,6 +92,14 @@ impl Selection {
         }
     }
 
+    pub fn len(self) -> usize {
+        if self.is_forward() {
+            self.cursor.0 - self.anchor.0
+        } else {
+            self.anchor.0 - self.cursor.0
+        }
+    }
+
     pub fn normalized(mut self, text: &Rope) -> Self {
         self.anchor = self.anchor.trim_to_text(text);
         self.cursor = self.cursor.trim_to_text(text);

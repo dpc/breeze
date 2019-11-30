@@ -669,7 +669,13 @@ impl Buffer {
 
         self.map_each_selection_mut(|sel, text| {
             let (start_left, start_right) = sel.sorted_pair();
-            let (mut left, mut right) = sel.cursor.find_surounding_area(text);
+            let (mut left, mut right) = if sel.len() <= 1 {
+                Idx::find_surounding_area(sel.cursor, sel.cursor, text)
+            } else if sel.is_forward() {
+                Idx::find_surounding_area(sel.anchor, sel.cursor, text)
+            } else {
+                Idx::find_surounding_area(sel.cursor, sel.anchor, text)
+            };
 
             // if we're exactly in the same spot, expand by one
             if (left == start_left && right == start_right) || left == right {

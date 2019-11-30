@@ -140,20 +140,17 @@ impl Idx {
         }
     }
 
-    pub fn find_surounding_area(self, text: &Rope) -> (Idx, Idx) {
-        self.find_surounding_area_opt(text)
-            .unwrap_or_else(|| (Self::begining(text), Self::end(text)))
-    }
-
-    pub fn find_surounding_area_opt(self, text: &Rope) -> Option<(Idx, Idx)> {
+    pub fn find_surounding_area_opt(
+        mut left: Idx,
+        mut right: Idx,
+        text: &Rope,
+    ) -> Option<(Idx, Idx)> {
         let begining = Idx::begining(text);
         let end = Idx::end(text);
         // left_back=====left_fron   right_front=====right_back
         let mut left_q: VecDeque<(char, Option<Idx>)> = VecDeque::new();
         let mut right_q: VecDeque<(char, Option<Idx>)> = VecDeque::new();
 
-        let mut left = self;
-        let mut right = self;
         let mut pushed_something = false;
 
         loop {
@@ -269,6 +266,10 @@ impl Idx {
                 }
             }
         }
+    }
+    pub fn find_surounding_area(left: Idx, right: Idx, text: &Rope) -> (Idx, Idx) {
+        Idx::find_surounding_area_opt(left, right, text)
+            .unwrap_or_else(|| (Self::begining(text), Self::end(text)))
     }
 
     pub fn to_before_indent_closing_char(mut self, text: &Rope) -> Option<Idx> {
