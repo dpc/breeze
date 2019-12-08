@@ -166,7 +166,7 @@ impl Idx {
                 left = left.backward(text);
 
                 match (is_indent_opening_char(ch), is_indent_closing_char(ch)) {
-                    (true, false) => {
+                    (true, _) => {
                         // we close the match if there is any, skipping any
                         // unmatched chars
                         let matching = matching_char(ch);
@@ -189,26 +189,6 @@ impl Idx {
                     (false, true) => {
                         right_q.push_front((ch, None));
                     }
-                    (true, true) => {
-                        // we close the match if there is any, skipping any
-                        // unmatched chars
-                        let matching = matching_char(ch);
-                        if right_q.iter().any(|(ch, _)| *ch == matching) {
-                            loop {
-                                let (ch, idx) = right_q.pop_front().expect("not empty");
-                                if matching == ch {
-                                    if let Some(idx) = idx {
-                                        return Some((left.forward(text), idx.backward(text)));
-                                    } else {
-                                        break;
-                                    }
-                                }
-                            }
-                        } else {
-                            left_q.push_front((ch, Some(left)));
-                            pushed_something = true;
-                        }
-                    }
                     (false, false) => {}
                 }
             } else if right != end {
@@ -216,7 +196,7 @@ impl Idx {
                 right = right.forward(text);
 
                 match (is_indent_closing_char(ch), is_indent_opening_char(ch)) {
-                    (true, false) => {
+                    (true, _) => {
                         // we close the match if there is any, skipping any
                         // unmatched chars
                         let matching = matching_char(ch);
@@ -239,28 +219,6 @@ impl Idx {
                     }
                     (false, true) => {
                         left_q.push_front((ch, None));
-                    }
-                    (true, true) => {
-                        // we close the match if there is any, skipping any
-                        // unmatched chars
-
-                        let matching = matching_char(ch);
-                        if left_q.iter().any(|(ch, _)| *ch == matching) {
-                            loop {
-                                let (ch, idx) = left_q.pop_front().expect("not empty");
-
-                                if matching == ch {
-                                    if let Some(idx) = idx {
-                                        return Some((idx.forward(text), right.backward(text)));
-                                    } else {
-                                        break;
-                                    }
-                                }
-                            }
-                        } else {
-                            right_q.push_front((ch, Some(right)));
-                            pushed_something = true;
-                        }
                     }
                     (false, false) => {}
                 }
