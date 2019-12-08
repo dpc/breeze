@@ -533,7 +533,7 @@ impl Buffer {
         self.map_each_enumerated_selection_mut(|i, sel, text| {
             let column = selection.cursor_column.get(i).cloned();
             let new_cursor = f(sel.cursor, column, text);
-            sel.anchor = new_cursor;
+            sel.anchor = sel.cursor;
             sel.cursor = new_cursor;
         });
     }
